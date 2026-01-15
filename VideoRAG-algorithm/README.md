@@ -8,15 +8,15 @@
 
 <img src='VideoRAG_cover.png' />
 
- This is the PyTorch implementation for VideoRAG proposed in this paper:
+This is the PyTorch implementation for VideoRAG proposed in this paper:
 
- >**VideoRAG: Retrieval-Augmented Generation with Extreme Long-Context Videos**  
- >Xubin Ren*, Lingrui Xu*, Long Xia, Shuaiqiang Wang, Dawei Yin, Chao Huang†
+> **VideoRAG: Retrieval-Augmented Generation with Extreme Long-Context Videos**  
+> Xubin Ren*, Lingrui Xu*, Long Xia, Shuaiqiang Wang, Dawei Yin, Chao Huang†
 
 \* denotes equal contribution.
 † denotes corresponding author
 
- In this paper, we proposed a retrieval-augmented generation framework specifically designed for processing and understanding **extremely long-context videos**.
+In this paper, we proposed a retrieval-augmented generation framework specifically designed for processing and understanding **extremely long-context videos**.
 
 ## 📋 Table of Contents
 
@@ -37,15 +37,19 @@
 VideoRAG introduces a novel dual-channel architecture that synergistically combines graph-driven textual knowledge grounding for modeling cross-video semantic relationships with hierarchical multimodal context encoding to preserve spatiotemporal visual patterns, enabling unbounded-length video understanding through dynamically constructed knowledge graphs that maintain semantic coherence across multi-video contexts while optimizing retrieval efficiency via adaptive multimodal fusion mechanisms.
 
 💻 **Efficient Extreme Long-Context Video Processing**
+
 - Leveraging a Single NVIDIA RTX 3090 GPU (24G) to comprehend Hundreds of Hours of video content 💪
 
 🗃️ **Structured Video Knowledge Indexing**
+
 - Multi-Modal Knowledge Indexing Framework distills hundreds of hours of video into a concise, structured knowledge graph 🗂️
 
 🔍 **Multi-Modal Retrieval for Comprehensive Responses**
+
 - Multi-Modal Retrieval Paradigm aligns textual semantics and visual content to identify the most relevant video for comprehensive responses 💬
 
 📚 **The New Established LongerVideos Benchmark**
+
 - The new established LongerVideos Benchmark features over 160 Videos totaling 134+ Hours across lectures, documentaries, and entertainment 🎬
 
 ## 🛠️ Installation
@@ -133,9 +137,10 @@ VideoRAG/
 VideoRAG is capable of extracting knowledge from multiple videos and answering queries based on those videos. Now, try VideoRAG with your own videos 🤗.
 
 > [!NOTE]
-> Currently, VideoRAG has only been tested in an English environment. To process videos in multiple languages, it is recommended to modify the  ```WhisperModel``` in [asr.py](https://github.com/HKUDS/VideoRAG/blob/main/videorag/_videoutil/asr.py). For more details, please refer to [faster-whisper](https://github.com/systran/faster-whisper).
+> Currently, VideoRAG has only been tested in an English environment. To process videos in multiple languages, it is recommended to modify the `WhisperModel` in [asr.py](https://github.com/HKUDS/VideoRAG/blob/main/videorag/_videoutil/asr.py). For more details, please refer to [faster-whisper](https://github.com/systran/faster-whisper).
 
 **At first**, let the VideoRAG extract and indexing the knowledge from given videos (Only one GPU with 24GB of memory is sufficient, such as the RTX 3090):
+
 ```python
 import os
 import logging
@@ -166,6 +171,7 @@ if __name__ == '__main__':
 ```
 
 **Then**, ask any questions about the videos! Here is an exmaple:
+
 ```python
 import os
 import logging
@@ -199,14 +205,15 @@ if __name__ == '__main__':
 ## 🧪 Experiments
 
 ### LongerVideos
+
 We constructed the LongerVideos benchmark to evaluate the model's performance in comprehending multiple long-context videos and answering open-ended queries. All the videos are open-access videos on YouTube, and we record the URLs of the collections of videos as well as the corresponding queries in the [JSON](https://github.com/HKUDS/VideoRAG/longervideos/dataset.json) file.
 
-| Video Type       | #video list | #video | #query | #avg. queries per list | #overall duration      |
-|------------------|------------:|-------:|-------:|-----------------------:|-------------------------|
-| **Lecture**      | 12          | 135    | 376    | 31.3                   | ~ 64.3 hours           |
-| **Documentary**  | 5           | 12     | 114    | 22.8                   | ~ 28.5 hours           |
-| **Entertainment**| 5           | 17     | 112    | 22.4                   | ~ 41.9 hours           |
-| **All**          | 22          | 164    | 602    | 27.4                   | ~ 134.6 hours          |
+| Video Type        | #video list | #video | #query | #avg. queries per list | #overall duration |
+| ----------------- | ----------: | -----: | -----: | ---------------------: | ----------------- |
+| **Lecture**       |          12 |    135 |    376 |                   31.3 | ~ 64.3 hours      |
+| **Documentary**   |           5 |     12 |    114 |                   22.8 | ~ 28.5 hours      |
+| **Entertainment** |           5 |     17 |    112 |                   22.4 | ~ 41.9 hours      |
+| **All**           |          22 |    164 |    602 |                   27.4 | ~ 134.6 hours     |
 
 ### Process LongerVideos with VideoRAG
 
@@ -280,7 +287,7 @@ python batch_quant_eval_calculate.py
 
 ## 🦙 Ollama Support
 
-This project also supports ollama.  To use, edit the ollama_config in [_llm.py](https://github.com/HKUDS/VideoRAG/blob/main/videorag/_llm.py).
+This project also supports ollama. To use, edit the ollama_config in [\_llm.py](https://github.com/HKUDS/VideoRAG/blob/main/videorag/_llm.py).
 Adjust the paramters of the models being used
 
 ```
@@ -302,14 +309,18 @@ ollama_config = LLMConfig(
     cheap_model_max_async = 1
 )
 ```
+
 And specify the config when creating your VideoRag instance
 
 ### Jupyter Notebook
-To  test the solution on a single video, just load the notebook in the [notebook folder](VideoRAG/nodebooks) and
+
+To test the solution on a single video, just load the notebook in the [notebook folder](VideoRAG/nodebooks) and
 update the paramters to fit your situation.
 
 ## 📖 Citation
+
 If you find this work is helpful to your research, please consider citing our paper:
+
 ```bibtex
 @article{VideoRAG,
   title={VideoRAG: Retrieval-Augmented Generation with Extreme Long-Context Videos},
@@ -326,3 +337,32 @@ We extend our heartfelt gratitude to the open-source community and the foundatio
 Our framework builds upon the collective wisdom of these exceptional projects, and we are honored to contribute to the advancement of multimodal AI research. We also acknowledge the broader research community for their continued dedication to pushing the boundaries of video understanding and retrieval-augmented generation.
 
 **🌟 Thank you for your interest in our work! Together, we're shaping the future of intelligent video AI. 🌟**
+
+## Run all in local with NVIDIA GPU
+
+### Setup environment
+
+- Install conda
+- Run in bash this following commands
+
+```bash
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+cd VideoRAG-algorithm
+pip install -r requirements_fix.txt
+pip install git+https://github.com/facebookresearch/ImageBind.git
+```
+
+- Test succesfull installation of torch and check version and nvidia support
+
+```bash
+python torch_test.py
+```
+
+- Install ollama (if not installed)
+- Pull lama3 and nomic-embed-text model
+
+```bash
+ollama pull llama3:8b
+ollama pull nomic-embed-text
+ollama pull olmo2
+```

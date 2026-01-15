@@ -1,0 +1,8 @@
+Video Name:001 Introduction to the Course Error processing:
+Error in segment_caption:
+ No package metadata was found for bitsandbytes
+
+Video Name:001 Introduction to the Course Error processing:
+Error in segment_caption:
+ Using `bitsandbytes` 4-bit quantization requires Accelerate: `pip install 'accelerate>=0.26.0'`
+

@@ -1,5 +1,5 @@
 # Byte-compiled / optimized / DLL files
-videorag/__pycache__/
+__pycache__/
 *.py[cod]
 *$py.class
 
@@ -12,3 +12,7 @@ videorag/__pycache__/
 ehthumbs.db
 Thumbs.db
 Desktop.ini
+videorag_Storage/
+.checkpoints/
+MiniCPM-V-2_6-int4/
+faster-distil-whisper-large-v3/
