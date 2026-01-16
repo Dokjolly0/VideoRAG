@@ -6,7 +6,7 @@
 
 <br/>
 
-<img src='VideoRAG_cover.png' />
+<img src='../assets/VideoRAG_cover.png' />
 
 This is the PyTorch implementation for VideoRAG proposed in this paper:
 
@@ -31,7 +31,7 @@ In this paper, we proposed a retrieval-augmented generation framework specifical
 ## ⚡ VideoRAG Framework
 
 <p align="center">
-<img src="VideoRAG.png" alt="VideoRAG" />
+<img src="../assets/VideoRAG.png" alt="VideoRAG" />
 </p>
 
 VideoRAG introduces a novel dual-channel architecture that synergistically combines graph-driven textual knowledge grounding for modeling cross-video semantic relationships with hierarchical multimodal context encoding to preserve spatiotemporal visual patterns, enabling unbounded-length video understanding through dynamically constructed knowledge graphs that maintain semantic coherence across multi-video contexts while optimizing retrieval efficiency via adaptive multimodal fusion mechanisms.
@@ -128,8 +128,6 @@ VideoRAG/
 ├── reproduce/
 ├── notesbooks/
 ├── videorag/
-├── VideoRAG_cover.png
-└── VideoRAG.png
 ```
 
 ## 🚀 Quick Start
@@ -357,7 +355,7 @@ cd VideoRAG-algorithm
 - Test succesfull installation of torch and check version and nvidia support
 
 ```bash
-python torch_test.py
+python scripts/torch_test.py
 ```
 
 - Install ollama (if not installed)

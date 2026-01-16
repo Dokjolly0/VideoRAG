@@ -1,6 +1,6 @@
 <div align="center">
   <picture>
-      <img src="cover.png" width="80%" style="border: none; box-shadow: none;" alt="Vimo: Chat with Your Videos">
+      <img src="assets/cover.png" width="80%" style="border: none; box-shadow: none;" alt="Vimo: Chat with Your Videos">
   </picture>
   
   <h1>
@@ -23,7 +23,7 @@
 
 <br/>
 
-<img src='VideoRAG-algorithm/VideoRAG_cover.png' />
+<img src='assets/VideoRAG_cover.png' />
 
 Vimo is a revolutionary desktop application that lets you **chat with your videos** using cutting-edge AI technology. Built on the powerful [VideoRAG framework](https://arxiv.org/abs/2502.01549), Vimo can understand and analyze videos of any length - from short clips to hundreds of hours of content - and answer your questions with remarkable accuracy.
 
@@ -110,7 +110,7 @@ For detailed setup instructions:
 ## 🔬 VideoRAG Algorithm
 
 <p align="center">
-<img src="VideoRAG-algorithm/VideoRAG.png" alt="VideoRAG Architecture" width="80%" />
+<img src="assets/VideoRAG.png" alt="VideoRAG Architecture" width="80%" />
 </p>
 
 VideoRAG introduces a novel dual-channel architecture that combines:
@@ -195,4 +195,4 @@ Vimo builds upon the incredible work of the open-source community:
 
 <div align="center">
   <sub>Built with ❤️ by the VideoRAG@HKUDS team.</sub>
-</div> 
+</div>

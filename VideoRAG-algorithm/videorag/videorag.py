@@ -1,48 +1,46 @@
 import asyncio
-import json
 import multiprocessing
 import os
 import shutil
-import sys
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from functools import partial
+from pathlib import Path
 from typing import Callable, Dict, List, Optional, Type, Union, cast
 
 import tiktoken
 from transformers import AutoModel, AutoTokenizer
+from utils.get_config_path import get_config_path
 
-from ._llm import LLMConfig, azure_openai_config, ollama_config, openai_config
-from ._op import (
+from videorag._llm import LLMConfig, openai_config
+from videorag._op import (
     chunking_by_video_segments,
     extract_entities,
     get_chunks,
     videorag_query,
     videorag_query_multiple_choice,
 )
-from ._storage import (
+from videorag._storage import (
     JsonKVStorage,
     NanoVectorDBStorage,
     NanoVectorDBVideoSegmentStorage,
     NetworkXStorage,
 )
-from ._utils import (
-    EmbeddingFunc,
+from videorag._utils import (
     always_get_an_event_loop,
-    compute_mdhash_id,
     convert_response_to_json,
     limit_async_func_call,
     logger,
     wrap_embedding_func_with_attrs,
 )
-from ._videoutil import (
+from videorag._videoutil import (
     merge_segment_information,
     saving_video_segments,
     segment_caption,
     speech_to_text,
     split_video,
 )
-from .base import (
+from videorag.base import (
     BaseGraphStorage,
     BaseKVStorage,
     BaseVectorStorage,
@@ -82,7 +80,7 @@ class VideoRAG:
             list[list[int]],
             List[str],
             tiktoken.Encoding,
-            Optional[int],
+            int,  # before are Optional[int]
         ],
         List[Dict[str, Union[str, int]]],
     ] = chunking_by_video_segments
@@ -93,9 +91,7 @@ class VideoRAG:
     # entity extraction
     entity_extract_max_gleaning: int = 1
     entity_summary_to_max_tokens: int = 500
-
-    # Change to your LLM provider
-    llm: LLMConfig = field(default_factory=openai_config)
+    llm: LLMConfig = openai_config  # before field(default_factory=openai_config)
 
     # entity extraction
     entity_extraction_func: callable = extract_entities
@@ -266,8 +262,14 @@ class VideoRAG:
 
             # if raise error in this two, stop the processing
             while not error_queue.empty():
+                config_path = Path(__file__).resolve().parents[2] / "config.json"
+                log_path = get_config_path("error_log_videorag", config_path)
+                if log_path is None:
+                    log_path = config_path.parent / "logs/error_log_videorag.log"
+                log_path.parent.mkdir(parents=True, exist_ok=True)
+
                 error_message = error_queue.get()
-                with open("error_log_videorag.txt", "a", encoding="utf-8") as log_file:
+                with open(log_path, "a", encoding="utf-8") as log_file:
                     log_file.write(
                         f"Video Name:{video_name} Error processing:\n{error_message}\n\n"
                     )
@@ -306,9 +308,16 @@ class VideoRAG:
 
         loop.run_until_complete(self.ainsert(self.video_segments._data))
 
-    def query(self, query: str, param: QueryParam = QueryParam()):
-        loop = always_get_an_event_loop()
-        return loop.run_until_complete(self.aquery(query, param))
+    def query(self, query: str, param: QueryParam) -> str:
+        try:
+            _ = asyncio.get_running_loop()
+        except RuntimeError:
+            return asyncio.run(self.aquery(query, param))
+        else:
+            raise RuntimeError(
+                "query() non può essere chiamata da un event loop attivo; "
+                "usa await aquery()"
+            )
 
     async def aquery(self, query: str, param: QueryParam = QueryParam()):
         if param.mode == "videorag":
@@ -363,7 +372,7 @@ class VideoRAG:
                 k: v for k, v in inserting_chunks.items() if k in _add_chunk_keys
             }
             if not len(inserting_chunks):
-                logger.warning(f"All chunks are already in the storage")
+                logger.warning("All chunks are already in the storage")
                 return
             logger.info(f"[New Chunks] inserting {len(inserting_chunks)} chunks")
             if self.enable_naive_rag:
