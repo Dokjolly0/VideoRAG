@@ -15,6 +15,13 @@ export interface VideoRAGConfig {
   openai_base_url: string
   image_bind_model_path: string
   base_storage_path?: string
+  
+  // New fields for local models
+  use_local_models?: boolean
+  ollama_host?: string
+  local_embedding_model?: string
+  local_best_model?: string
+  local_cheap_model?: string
 }
 
 export interface QueryResponse {

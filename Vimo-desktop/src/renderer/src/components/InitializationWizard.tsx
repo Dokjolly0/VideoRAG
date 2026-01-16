@@ -14,6 +14,7 @@ import {
   ExternalLink,
 } from 'lucide-react';
 import vimoLogo from '../assets/images/vimi-logo.png';
+import { ToggleSwitch } from './ui/toggle-switch';
 
 interface InitializationWizardProps {
   onComplete: () => void;
@@ -35,6 +36,7 @@ const InitializationWizard: React.FC<InitializationWizardProps> = ({ onComplete 
   const [downloadProgress, setDownloadProgress] = useState({ imagebind: 0 });
   const [isInitializing, setIsInitializing] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
+  const [useLocalModels, setUseLocalModels] = useState(false);
   
   // API Key configuration status
   const [apiKeySettings, setApiKeySettings] = useState({
@@ -44,7 +46,11 @@ const InitializationWizard: React.FC<InitializationWizardProps> = ({ onComplete 
     analysisModel: 'gpt-4o-mini',
     dashscopeApiKey: '',
     captionModel: 'qwen-vl-plus-latest',
-    asrModel: 'paraformer-realtime-v2'
+    asrModel: 'paraformer-realtime-v2',
+    ollama_host: 'http://127.0.0.1:11434',
+    local_embedding_model: 'nomic-embed-text',
+    local_best_model: 'gemma2:latest',
+    local_cheap_model: 'olmo2',
   });
 
 
@@ -55,12 +61,17 @@ const InitializationWizard: React.FC<InitializationWizardProps> = ({ onComplete 
         // Load existing settings
         const settingsResult = await window.api.loadSettings();
         
-        if (settingsResult.success && settingsResult.settings?.storeDirectory) {
-          const existingDirectory = settingsResult.settings.storeDirectory;
-          setStoreDirectory(existingDirectory);
-          
-          // Check if models already exist in the stored directory
-          await checkModelFiles(existingDirectory);
+        if (settingsResult.success && settingsResult.settings) {
+          const { settings } = settingsResult;
+          if (settings.storeDirectory) {
+            setStoreDirectory(settings.storeDirectory);
+            await checkModelFiles(settings.storeDirectory);
+          }
+          // Load api key settings
+          setApiKeySettings(prev => ({ ...prev, ...settings }));
+          if (settings.use_local_models) {
+            setUseLocalModels(true);
+          }
         }
       } catch (error) {
         console.error('Failed to initialize component:', error);
@@ -156,8 +167,7 @@ const InitializationWizard: React.FC<InitializationWizardProps> = ({ onComplete 
   // Check if can proceed to next step
   const canProceedToStep2 = storeDirectory !== '';
   const canProceedToStep3 = imagebindStatus === 'completed';
-  // API keys are optional but recommended
-  const canProceedToStep4 = canProceedToStep3;
+  const canProceedToStep4 = canProceedToStep3 && (useLocalModels || (apiKeySettings.openaiApiKey && apiKeySettings.dashscopeApiKey));
 
   // Handle step transitions with animation
   const goToStep = (step: number) => {
@@ -205,6 +215,7 @@ const InitializationWizard: React.FC<InitializationWizardProps> = ({ onComplete 
     const settings = {
       storeDirectory,
       imagebindInstalled: true,
+      use_local_models: useLocalModels,
       ...apiKeySettings, // Include API key settings
       initializedAt: new Date().toISOString()
     };
@@ -402,149 +413,168 @@ const InitializationWizard: React.FC<InitializationWizardProps> = ({ onComplete 
         </p>
       </div>
 
-      <div className="space-y-6">
-        {/* OpenAI Configuration */}
-        <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-100">
+      {/* Local Models Toggle */}
+      <div className="p-4 rounded-lg bg-gray-50">
+        <ToggleSwitch 
+          label="Use Local Models (Ollama)"
+          checked={useLocalModels}
+          onChange={setUseLocalModels}
+        />
+      </div>
+
+      {useLocalModels ? (
+        // Local Models Configuration
+        <div className="bg-gradient-to-r from-green-50 to-teal-50 rounded-xl p-6 border border-green-100">
           <div className="flex items-center gap-3 mb-4">
-            <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center">
-              <Brain className="w-6 h-6 text-white" />
+            <div className="w-10 h-10 bg-gradient-to-r from-green-500 to-teal-500 rounded-lg flex items-center justify-center">
+              <Settings className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-blue-900">OpenAI Configuration</h3>
-              <p className="text-sm text-blue-700">Language model services for intelligent analysis</p>
+              <h3 className="text-lg font-bold text-green-900">Local Model Configuration</h3>
+              <p className="text-sm text-green-700">Powered by Ollama</p>
             </div>
           </div>
-          
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium text-gray-700 block mb-2">
-                Base URL
-              </label>
+              <label className="text-sm font-medium text-gray-700 block mb-2">Ollama Host</label>
               <input
                 type="text"
-                placeholder="https://api.openai.com/v1"
-                value={apiKeySettings.openaiBaseUrl}
-                onChange={(e) => handleApiKeyChange('openaiBaseUrl', e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={apiKeySettings.ollama_host}
+                onChange={(e) => handleApiKeyChange('ollama_host', e.target.value)}
+                placeholder="http://127.0.0.1:11434"
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
               />
             </div>
-            
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-2">Embedding Model</label>
+                <input
+                  type="text"
+                  value={apiKeySettings.local_embedding_model}
+                  onChange={(e) => handleApiKeyChange('local_embedding_model', e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-2">Best Model</label>
+                <input
+                  type="text"
+                  value={apiKeySettings.local_best_model}
+                  onChange={(e) => handleApiKeyChange('local_best_model', e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-2">Cheap Model</label>
+                <input
+                  type="text"
+                  value={apiKeySettings.local_cheap_model}
+                  onChange={(e) => handleApiKeyChange('local_cheap_model', e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+      ) : (
+        // Cloud API Keys Configuration
+        <div className="space-y-6">
+          {/* OpenAI Configuration */}
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-100">
+            <div className="flex items-center gap-3 mb-4">
+              <div className="w-10 h-10 bg-gradient-to-r from-blue-500 to-indigo-500 rounded-lg flex items-center justify-center">
+                <Brain className="w-6 h-6 text-white" />
+              </div>
+              <div>
+                <h3 className="text-lg font-bold text-blue-900">OpenAI Configuration</h3>
+                <p className="text-sm text-blue-700">Language model services for intelligent analysis</p>
+              </div>
+            </div>
+            <div className="space-y-4">
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-2">Base URL</label>
+                <input
+                  type="text"
+                  placeholder="https://api.openai.com/v1"
+                  value={apiKeySettings.openaiBaseUrl}
+                  onChange={(e) => handleApiKeyChange('openaiBaseUrl', e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="text-sm font-medium text-gray-700 block mb-2">API Key *</label>
+                <input
+                  type="password"
+                  placeholder="sk-..."
+                  value={apiKeySettings.openaiApiKey}
+                  onChange={(e) => handleApiKeyChange('openaiApiKey', e.target.value)}
+                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm font-medium text-gray-700 block mb-2">Processing Model</label>
+                  <select
+                    value={apiKeySettings.processingModel}
+                    onChange={(e) => handleApiKeyChange('processingModel', e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="gpt-4o-mini">gpt-4o-mini</option>
+                    <option value="gpt-4o">gpt-4o</option>
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">For high-volume preprocessing.</p>
+                </div>
+                <div>
+                  <label className="text-sm font-medium text-gray-700 block mb-2">Analysis Model</label>
+                  <select
+                    value={apiKeySettings.analysisModel}
+                    onChange={(e) => handleApiKeyChange('analysisModel', e.target.value)}
+                    className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
+                  >
+                    <option value="gpt-4o-mini">gpt-4o-mini</option>
+                    <option value="gpt-4o">gpt-4o</option>
+                  </select>
+                  <p className="text-xs text-gray-500 mt-1">For detailed analysis tasks.</p>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          {/* DashScope Configuration */}
+          <div className="bg-gradient-to-r from-orange-50 to-yellow-50 rounded-xl p-6 border border-orange-100">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 bg-gradient-to-r from-orange-500 to-yellow-500 rounded-lg flex items-center justify-center">
+                  <Settings className="w-6 h-6 text-white" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-bold text-orange-900">DashScope Configuration</h3>
+                  <p className="text-sm text-orange-700">For video captioning</p>
+                </div>
+              </div>
+              <a
+                href="https://www.alibabacloud.com/help/en/model-studio/get-api-key?spm=a2c63.p38356.0.i1"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 transition-colors"
+              >
+                <ExternalLink size={14} />
+                Get API Key
+              </a>
+            </div>
             <div>
-              <label className="text-sm font-medium text-gray-700 block mb-2">
-                API Key
-              </label>
+              <label className="text-sm font-medium text-gray-700 block mb-2">DashScope API Key *</label>
               <input
                 type="password"
                 placeholder="sk-..."
-                value={apiKeySettings.openaiApiKey}
-                onChange={(e) => handleApiKeyChange('openaiApiKey', e.target.value)}
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                value={apiKeySettings.dashscopeApiKey}
+                onChange={(e) => handleApiKeyChange('dashscopeApiKey', e.target.value)}
+                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
               />
-            </div>
-            
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="text-sm font-medium text-gray-700 block mb-2">
-                  Processing Model
-                </label>
-                <select
-                  value={apiKeySettings.processingModel}
-                  onChange={(e) => handleApiKeyChange('processingModel', e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                >
-                  <option value="gpt-4o-mini">gpt-4o-mini</option>
-                  <option value="gpt-4o">gpt-4o</option>
-                  <option value="gpt-5-mini">gpt-5-mini</option>
-                  <option value="gpt-5">gpt-5</option>
-                </select>
-                <p className="text-xs text-gray-500 mt-1">Choose model for high-volume preprocessing</p>
-              </div>
-              
-              <div>
-                <label className="text-sm font-medium text-gray-700 block mb-2">
-                  Analysis Model
-                </label>
-                <select
-                  value={apiKeySettings.analysisModel}
-                  onChange={(e) => handleApiKeyChange('analysisModel', e.target.value)}
-                  className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
-                >
-                  <option value="gpt-4o-mini">gpt-4o-mini</option>
-                  <option value="gpt-4o">gpt-4o</option>
-                  <option value="gpt-5-mini">gpt-5-mini</option>
-                  <option value="gpt-5">gpt-5</option>
-                </select>
-                <p className="text-xs text-gray-500 mt-1">Choose model for detailed analysis tasks</p>
-              </div>
             </div>
           </div>
         </div>
-
-        {/* DashScope Configuration */}
-        <div className="bg-gradient-to-r from-orange-50 to-yellow-50 rounded-xl p-6 border border-orange-100">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-r from-orange-500 to-yellow-500 rounded-lg flex items-center justify-center">
-                <Settings className="w-6 h-6 text-white" />
-              </div>
-              <div>
-                <h3 className="text-lg font-bold text-orange-900">DashScope Configuration</h3>
-                <p className="text-sm text-orange-700">Alibaba Cloud API for video captioning</p>
-              </div>
-            </div>
-            <a
-              href="https://www.alibabacloud.com/help/en/model-studio/get-api-key?spm=a2c63.p38356.0.i1"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-1 text-sm text-blue-600 hover:text-blue-800 transition-colors"
-            >
-              <ExternalLink size={14} />
-              Get API Key Tutorial
-            </a>
-          </div>
-          
-          <div>
-            <label className="text-sm font-medium text-gray-700 block mb-2">
-              DashScope API Key
-            </label>
-            <input
-              type="password"
-              placeholder="sk-..."
-              value={apiKeySettings.dashscopeApiKey}
-              onChange={(e) => handleApiKeyChange('dashscopeApiKey', e.target.value)}
-              className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
-            />
-          </div>
-          
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-sm font-medium text-gray-700 block mb-2">
-                Caption Model
-              </label>
-              <input
-                type="text"
-                value="qwen-vl-plus-latest"
-                readOnly
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-gray-100 text-gray-600"
-              />
-              <p className="text-xs text-gray-500 mt-1">Fixed model for video captioning tasks</p>
-            </div>
-            
-            <div>
-              <label className="text-sm font-medium text-gray-700 block mb-2">
-                ASR Model
-              </label>
-              <input
-                type="text"
-                value="paraformer-realtime-v2"
-                readOnly
-                className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md bg-gray-100 text-gray-600"
-              />
-              <p className="text-xs text-gray-500 mt-1">Fixed model for speech recognition tasks</p>
-            </div>
-          </div>
-        </div>
-      </div>
+      )}
 
       <div className="flex justify-between items-center">
         <Button 

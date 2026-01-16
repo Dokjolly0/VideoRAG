@@ -26,7 +26,7 @@ import warnings
 warnings.filterwarnings("ignore")
 logging.getLogger("httpx").setLevel(logging.WARNING)
 
-from videorag._llm import LLMConfig, openai_embedding, gpt_complete, dashscope_caption_complete
+from videorag._llm import LLMConfig, openai_embedding, gpt_complete, dashscope_caption_complete, ollama_config, ollama_embedding, ollama_complete, ollama_mini_complete
 from videorag import VideoRAG, QueryParam
 
 # Log recording function
@@ -94,6 +94,49 @@ def update_session_status(chat_id: str, base_storage_path: str, status_type: str
     # Write updated status
     write_status_json(status_file, current_status)
     log_to_file(f"📝 Updated {status_type} status for {chat_id}")
+
+def create_llm_config(global_config):
+    """Create LLMConfig based on global configuration"""
+    use_local_models = global_config.get("use_local_models", False)
+
+    if use_local_models:
+        log_to_file("🔧 Creating LLM config for LOCAL models")
+        # Use a copy of the default ollama_config to avoid modifying the global default
+        config = ollama_config
+        config.embedding_model_name = global_config.get("local_embedding_model", "nomic-embed-text")
+        config.best_model_name = global_config.get("local_best_model", "gemma2:latest")
+        config.cheap_model_name = global_config.get("local_cheap_model", "olmo2")
+        
+        # Set Ollama host if provided
+        ollama_host = global_config.get("ollama_host")
+        if ollama_host:
+            os.environ["OLLAMA_HOST"] = ollama_host
+            log_to_file(f"🔧 Set OLLAMA_HOST to: {ollama_host}")
+            
+        return config
+    else:
+        log_to_file("🔧 Creating LLM config for REMOTE models")
+        # Existing logic for OpenAI/Dashscope
+        return LLMConfig(
+            embedding_func_raw=openai_embedding,
+            embedding_model_name="text-embedding-3-small",
+            embedding_dim=1536,
+            embedding_max_token_size=8192,
+            embedding_batch_num=32,
+            embedding_func_max_async=16,
+            query_better_than_threshold=0.2,
+            best_model_func_raw=gpt_complete,
+            best_model_name=global_config.get("analysisModel"),    
+            best_model_max_token_size=32768,
+            best_model_max_async=16,
+            cheap_model_func_raw=gpt_complete,
+            cheap_model_name=global_config.get("processingModel"),
+            cheap_model_max_token_size=32768,
+            cheap_model_max_async=16,
+            caption_model_func_raw=dashscope_caption_complete,
+            caption_model_name=global_config.get("caption_model"),
+            caption_model_max_async=3
+        )
 
 class GlobalImageBindManager:
     """Global ImageBind manager, providing HTTP API interface, supporting concurrent access control"""
@@ -643,26 +686,7 @@ def index_video_worker_process(chat_id, video_path_list, global_config, server_u
         session_working_dir = os.path.join(base_storage_path, f"chat-{chat_id}")
         os.makedirs(session_working_dir, exist_ok=True)
         
-        videorag_llm_config = LLMConfig(
-            embedding_func_raw=openai_embedding,
-            embedding_model_name="text-embedding-3-small",
-            embedding_dim=1536,
-            embedding_max_token_size=8192,
-            embedding_batch_num=32,
-            embedding_func_max_async=16,
-            query_better_than_threshold=0.2,
-            best_model_func_raw=gpt_complete,
-            best_model_name=global_config.get("analysisModel"),    
-            best_model_max_token_size=32768,
-            best_model_max_async=16,
-            cheap_model_func_raw=gpt_complete,
-            cheap_model_name=global_config.get("processingModel"),
-            cheap_model_max_token_size=32768,
-            cheap_model_max_async=16,
-            caption_model_func_raw=dashscope_caption_complete,
-            caption_model_name=global_config.get("caption_model"),
-            caption_model_max_async=3
-        )
+        videorag_llm_config = create_llm_config(global_config)
         
         videorag_instance = VideoRAG(
             llm=videorag_llm_config,
@@ -764,26 +788,7 @@ def query_worker_process(chat_id, query, global_config, server_url):
         session_working_dir = os.path.join(base_storage_path, f"chat-{chat_id}")
         assert os.path.exists(session_working_dir), f"Session working directory does not exist: {session_working_dir}"
 
-        videorag_llm_config = LLMConfig(
-            embedding_func_raw=openai_embedding,
-            embedding_model_name="text-embedding-3-small",
-            embedding_dim=1536,
-            embedding_max_token_size=8192,
-            embedding_batch_num=32,
-            embedding_func_max_async=16,
-            query_better_than_threshold=0.2,
-            best_model_func_raw=gpt_complete,
-            best_model_name=global_config.get("analysisModel"),    
-            best_model_max_token_size=32768,
-            best_model_max_async=16,
-            cheap_model_func_raw=gpt_complete,
-            cheap_model_name=global_config.get("processingModel"),
-            cheap_model_max_token_size=32768,
-            cheap_model_max_async=16,
-            caption_model_func_raw=dashscope_caption_complete,
-            caption_model_name=global_config.get("caption_model"),
-            caption_model_max_async=3
-        )
+        videorag_llm_config = create_llm_config(global_config)
         
         videorag_instance = VideoRAG(
             llm=videorag_llm_config,
@@ -1439,4 +1444,4 @@ if __name__ == '__main__':
         cleanup_on_exit()
         exit(1)
     finally:
-        cleanup_on_exit() 
+        cleanup_on_exit()

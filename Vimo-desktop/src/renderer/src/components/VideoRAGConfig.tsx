@@ -3,6 +3,7 @@ import { X, Settings, CheckCircle, AlertCircle, Play, Square, RefreshCw } from '
 import { Button } from './ui/button'
 import { useVideoRAG, VideoRAGConfig } from '../hooks/useVideoRAG'
 import { useVideoRAGService } from '../hooks/useVideoRAGService'
+import { ToggleSwitch } from './ui/toggle-switch'
 
 interface VideoRAGConfigProps {
   isOpen: boolean
@@ -25,13 +26,18 @@ export const VideoRAGConfigModal = ({ isOpen, onClose }: VideoRAGConfigProps) =>
     openai_api_key: '',
     openai_base_url: 'https://api.nuwaapi.com/v1',
     image_bind_model_path: '/Users/renxubin/Desktop/videorag-store/imagebind_huge/imagebind_huge.pth',
-    base_storage_path: './videorag-sessions'
+    base_storage_path: './videorag-sessions',
+    use_local_models: false,
+    ollama_host: 'http://127.0.0.1:11434',
+    local_embedding_model: 'nomic-embed-text',
+    local_best_model: 'gemma2:latest',
+    local_cheap_model: 'olmo2',
   })
   
   // Local check configuration completeness, not dependent on network status
-  const isConfigured = !!(config.openai_api_key && 
-                          config.ali_dashscope_api_key && 
-                          config.image_bind_model_path)
+  const isConfigured = config.use_local_models 
+    ? !!config.image_bind_model_path 
+    : !!(config.openai_api_key && config.ali_dashscope_api_key && config.image_bind_model_path)
   
   const [showApiKeys, setShowApiKeys] = useState(false)
 
@@ -40,14 +46,16 @@ export const VideoRAGConfigModal = ({ isOpen, onClose }: VideoRAGConfigProps) =>
     const savedConfig = localStorage.getItem('videorag-config')
     if (savedConfig) {
       try {
-        setConfig(JSON.parse(savedConfig))
+        const parsedConfig = JSON.parse(savedConfig)
+        // Merge saved config with defaults to ensure new fields are present
+        setConfig(prev => ({ ...prev, ...parsedConfig }))
       } catch (error) {
         console.error('Failed to load saved config:', error)
       }
     }
   }, [])
 
-  const handleConfigChange = (field: keyof VideoRAGConfig, value: string) => {
+  const handleConfigChange = (field: keyof VideoRAGConfig, value: string | boolean) => {
     setConfig(prev => ({
       ...prev,
       [field]: value
@@ -208,73 +216,131 @@ export const VideoRAGConfigModal = ({ isOpen, onClose }: VideoRAGConfigProps) =>
             </div>
           )}
 
-          {/* API Keys Section */}
+          {/* Local Models Section */}
           <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="font-medium">API Keys</h3>
-              <Button
-                size="sm"
-                variant="outline"
-                onClick={() => setShowApiKeys(!showApiKeys)}
-              >
-                {showApiKeys ? 'Hide' : 'Show'} Keys
-              </Button>
-            </div>
-
-            <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  OpenAI API Key *
-                </label>
-                <input
-                  type={showApiKeys ? 'text' : 'password'}
-                  value={config.openai_api_key}
-                  onChange={(e) => handleConfigChange('openai_api_key', e.target.value)}
-                  placeholder="sk-..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  OpenAI Base URL
-                </label>
-                <input
-                  type="text"
-                  value={config.openai_base_url}
-                  onChange={(e) => handleConfigChange('openai_base_url', e.target.value)}
-                  placeholder="https://api.openai.com/v1"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  Alibaba DashScope API Key *
-                </label>
-                <input
-                  type={showApiKeys ? 'text' : 'password'}
-                  value={config.ali_dashscope_api_key}
-                  onChange={(e) => handleConfigChange('ali_dashscope_api_key', e.target.value)}
-                  placeholder="sk-..."
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-1">
-                  DashScope Base URL
-                </label>
-                <input
-                  type="text"
-                  value={config.ali_dashscope_base_url}
-                  onChange={(e) => handleConfigChange('ali_dashscope_base_url', e.target.value)}
-                  placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1"
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                />
-              </div>
+            <h3 className="font-medium">Local Models</h3>
+            <div className="p-4 rounded-lg bg-gray-50">
+              <ToggleSwitch 
+                label="Use Local Models (Ollama)"
+                checked={!!config.use_local_models}
+                onChange={(checked) => handleConfigChange('use_local_models', checked)}
+              />
+              {config.use_local_models && (
+                <div className="mt-4 space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Ollama Host</label>
+                    <input
+                      type="text"
+                      value={config.ollama_host || ''}
+                      onChange={(e) => handleConfigChange('ollama_host', e.target.value)}
+                      placeholder="http://127.0.0.1:11434"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Embedding Model</label>
+                    <input
+                      type="text"
+                      value={config.local_embedding_model || ''}
+                      onChange={(e) => handleConfigChange('local_embedding_model', e.target.value)}
+                      placeholder="nomic-embed-text"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Best Model (for Analysis)</label>
+                    <input
+                      type="text"
+                      value={config.local_best_model || ''}
+                      onChange={(e) => handleConfigChange('local_best_model', e.target.value)}
+                      placeholder="gemma2:latest"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Cheap Model (for Processing)</label>
+                    <input
+                      type="text"
+                      value={config.local_cheap_model || ''}
+                      onChange={(e) => handleConfigChange('local_cheap_model', e.target.value)}
+                      placeholder="olmo2"
+                      className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
           </div>
+
+          {/* API Keys Section (conditionally rendered) */}
+          {!config.use_local_models && (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="font-medium">API Keys</h3>
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => setShowApiKeys(!showApiKeys)}
+                >
+                  {showApiKeys ? 'Hide' : 'Show'} Keys
+                </Button>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    OpenAI API Key *
+                  </label>
+                  <input
+                    type={showApiKeys ? 'text' : 'password'}
+                    value={config.openai_api_key}
+                    onChange={(e) => handleConfigChange('openai_api_key', e.target.value)}
+                    placeholder="sk-..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    OpenAI Base URL
+                  </label>
+                  <input
+                    type="text"
+                    value={config.openai_base_url}
+                    onChange={(e) => handleConfigChange('openai_base_url', e.target.value)}
+                    placeholder="https://api.openai.com/v1"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    Alibaba DashScope API Key *
+                  </label>
+                  <input
+                    type={showApiKeys ? 'text' : 'password'}
+                    value={config.ali_dashscope_api_key}
+                    onChange={(e) => handleConfigChange('ali_dashscope_api_key', e.target.value)}
+                    placeholder="sk-..."
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">
+                    DashScope Base URL
+                  </label>
+                  <input
+                    type="text"
+                    value={config.ali_dashscope_base_url}
+                    onChange={(e) => handleConfigChange('ali_dashscope_base_url', e.target.value)}
+                    placeholder="https://dashscope.aliyuncs.com/compatible-mode/v1"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* Model Path Section */}
           <div className="space-y-4">
@@ -325,7 +391,7 @@ export const VideoRAGConfigModal = ({ isOpen, onClose }: VideoRAGConfigProps) =>
           </Button>
           <Button 
             onClick={handleSave}
-            disabled={loading.initializing || !config.openai_api_key || !config.ali_dashscope_api_key || !config.image_bind_model_path}
+            disabled={loading.initializing || !isConfigured}
           >
             {loading.initializing ? 'Configuring...' : 'Save & Configure'}
           </Button>
