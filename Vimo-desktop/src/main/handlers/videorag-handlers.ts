@@ -66,9 +66,32 @@ export function startVideoRAGService(): Promise<boolean> {
       }
 
       if (isDev) {
-        // Development mode: skip starting backend, but still scan for existing service
-        console.log('🚀 Development mode detected - skipping backend service startup')
-        console.log('💡 In development, scanning for manually started Python backend...')
+        // Development mode: start python script directly
+        console.log('🚀 Development mode - starting Python backend service')
+        const scriptPath = path.join(__dirname, '..', '..', 'python_backend', 'videorag_api.py')
+        const scriptDir = path.dirname(scriptPath)
+        
+        console.log(`✅ Python script path: ${scriptPath}`)
+
+        pythonProcess = spawn('python', ['-u', scriptPath], { // -u for unbuffered output
+          shell: true, // Use shell to solve PATH issues on Windows
+          stdio: ['pipe', 'pipe', 'pipe'],
+          cwd: scriptDir,
+          env: { ...process.env },
+        })
+
+        pythonProcess.stdout?.on('data', (data) => {
+          const output = data.toString()
+          console.log(`VideoRAG API: ${output}`)
+        })
+
+        pythonProcess.stderr?.on('data', (data) => {
+          const errorStr = data.toString()
+          console.error(`VideoRAG API Error: ${errorStr}`)
+        })
+        
+        console.log(`✅ Successfully started Python script`)
+
       } else {
         // Production mode: start the packaged executable
         console.log('🚀 Production mode - starting packaged backend service')
