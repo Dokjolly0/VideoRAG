@@ -346,10 +346,12 @@ Our framework builds upon the collective wisdom of these exceptional projects, a
 - Run in bash this following commands
 
 ```bash
+conda create -n videorag python=3.10
+conda activate videorag
+pip install -r .\VideoRAG-algorithm\requirements.txt
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
+python installer/install_llm_weights.py
 cd VideoRAG-algorithm
-pip install -r requirements_fix.txt
-pip install git+https://github.com/facebookresearch/ImageBind.git
 ```
 
 - Test succesfull installation of torch and check version and nvidia support
