@@ -16,3 +16,4 @@ videorag_Storage/
 .checkpoints/
 MiniCPM-V-2_6-int4/
 faster-distil-whisper-large-v3/
+output_console.txt
