@@ -367,4 +367,5 @@ python torch_test.py
 ollama pull llama3:8b
 ollama pull nomic-embed-text
 ollama pull olmo2
+ollama pull gemma2:latest
 ```

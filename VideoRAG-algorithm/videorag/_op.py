@@ -727,18 +727,24 @@ async def videorag_query(
 
     retreived_video_context = f"\n-----Retrieved Knowledge From Videos-----\n```csv\n{text_units_context}\n```\n"
     
-    if query_param.wo_reference:
-        sys_prompt_temp = PROMPTS["videorag_response_wo_reference"]
-    else:
-        sys_prompt_temp = PROMPTS["videorag_response"]
-        
-    sys_prompt = sys_prompt_temp.format(
-        video_data=retreived_video_context,
-        chunk_data=retreived_chunk_context,
-        response_type=query_param.response_type
-    )
+    sys_prompt = """You are a helpful assistant. Answer the user's query based on the provided context from a video.
+If the context is not enough, just say so. Do not make anything up."""
+
+    user_prompt = f"""Here is the context from the video:
+
+--- Video Content ---
+{retreived_video_context}
+
+--- Text from video ---
+{retreived_chunk_context}
+
+--- User Query ---
+{query}
+
+Please answer the user's query based on the provided context.
+"""
     response = await use_model_func(
-        query,
+        user_prompt,
         system_prompt=sys_prompt,
     )
     return response

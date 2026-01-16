@@ -1,23 +1,18 @@
-import os
-import sys
-import json
-import shutil
 import asyncio
+import json
 import multiprocessing
+import os
+import shutil
+import sys
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from functools import partial
 from typing import Callable, Dict, List, Optional, Type, Union, cast
-from transformers import AutoModel, AutoTokenizer
+
 import tiktoken
+from transformers import AutoModel, AutoTokenizer
 
-
-from ._llm import (
-    LLMConfig,
-    openai_config,
-    azure_openai_config,
-    ollama_config
-)
+from ._llm import LLMConfig, azure_openai_config, ollama_config, openai_config
 from ._op import (
     chunking_by_video_segments,
     extract_entities,
@@ -33,26 +28,26 @@ from ._storage import (
 )
 from ._utils import (
     EmbeddingFunc,
-    compute_mdhash_id,
-    limit_async_func_call,
-    wrap_embedding_func_with_attrs,
-    convert_response_to_json,
     always_get_an_event_loop,
+    compute_mdhash_id,
+    convert_response_to_json,
+    limit_async_func_call,
     logger,
+    wrap_embedding_func_with_attrs,
+)
+from ._videoutil import (
+    merge_segment_information,
+    saving_video_segments,
+    segment_caption,
+    speech_to_text,
+    split_video,
 )
 from .base import (
     BaseGraphStorage,
     BaseKVStorage,
     BaseVectorStorage,
-    StorageNameSpace,
     QueryParam,
-)
-from ._videoutil import(
-    split_video,
-    speech_to_text,
-    segment_caption,
-    merge_segment_information,
-    saving_video_segments,
+    StorageNameSpace,
 )
 
 
@@ -61,22 +56,22 @@ class VideoRAG:
     working_dir: str = field(
         default_factory=lambda: f"./videorag_cache_{datetime.now().strftime('%Y-%m-%d-%H:%M:%S')}"
     )
-    
+
     # video
     threads_for_split: int = 10
-    video_segment_length: int = 30 # seconds
-    rough_num_frames_per_segment: int = 5 # frames
-    fine_num_frames_per_segment: int = 15 # frames
+    video_segment_length: int = 30  # seconds
+    rough_num_frames_per_segment: int = 5  # frames
+    fine_num_frames_per_segment: int = 15  # frames
     video_output_format: str = "mp4"
     audio_output_format: str = "mp3"
     video_embedding_batch_num: int = 2
     segment_retrieval_top_k: int = 4
     video_embedding_dim: int = 1024
-    
+
     # query
     retrieval_topk_chunks: int = 2
     query_better_than_threshold: float = 0.2
-    
+
     # graph mode
     enable_local: bool = True
     enable_naive_rag: bool = True
@@ -101,10 +96,10 @@ class VideoRAG:
 
     # Change to your LLM provider
     llm: LLMConfig = field(default_factory=openai_config)
-    
+
     # entity extraction
     entity_extraction_func: callable = extract_entities
-    
+
     # storage
     key_string_value_json_storage_cls: Type[BaseKVStorage] = JsonKVStorage
     vector_db_storage_cls: Type[BaseVectorStorage] = NanoVectorDBStorage
@@ -121,17 +116,21 @@ class VideoRAG:
     def load_caption_model(self, debug=False):
         # caption model
         if not debug:
-            self.caption_model = AutoModel.from_pretrained('./MiniCPM-V-2_6-int4', trust_remote_code=True)
-            self.caption_tokenizer = AutoTokenizer.from_pretrained('./MiniCPM-V-2_6-int4', trust_remote_code=True)
+            self.caption_model = AutoModel.from_pretrained(
+                "./MiniCPM-V-2_6-int4", trust_remote_code=True
+            )
+            self.caption_tokenizer = AutoTokenizer.from_pretrained(
+                "./MiniCPM-V-2_6-int4", trust_remote_code=True
+            )
             self.caption_model.eval()
         else:
             self.caption_model = None
             self.caption_tokenizer = None
-    
+
     def __post_init__(self):
         _print_config = ",\n  ".join([f"{k} = {v}" for k, v in asdict(self).items()])
         logger.debug(f"VideoRAG init with param:\n\n  {_print_config}\n")
-        
+
         if not os.path.exists(self.working_dir) and self.always_create_working_dir:
             logger.info(f"Creating working directory {self.working_dir}")
             os.makedirs(self.working_dir)
@@ -139,7 +138,7 @@ class VideoRAG:
         self.video_path_db = self.key_string_value_json_storage_cls(
             namespace="video_path", global_config=asdict(self)
         )
-        
+
         self.video_segments = self.key_string_value_json_storage_cls(
             namespace="video_segments", global_config=asdict(self)
         )
@@ -160,10 +159,13 @@ class VideoRAG:
             namespace="chunk_entity_relation", global_config=asdict(self)
         )
 
-        self.embedding_func = limit_async_func_call(self.llm.embedding_func_max_async)(wrap_embedding_func_with_attrs(
-                embedding_dim = self.llm.embedding_dim,
-                max_token_size = self.llm.embedding_max_token_size,
-                model_name = self.llm.embedding_model_name)(self.llm.embedding_func))
+        self.embedding_func = limit_async_func_call(self.llm.embedding_func_max_async)(
+            wrap_embedding_func_with_attrs(
+                embedding_dim=self.llm.embedding_dim,
+                max_token_size=self.llm.embedding_max_token_size,
+                model_name=self.llm.embedding_model_name,
+            )(self.llm.embedding_func)
+        )
         self.entities_vdb = (
             self.vector_db_storage_cls(
                 namespace="entities",
@@ -183,56 +185,54 @@ class VideoRAG:
             if self.enable_naive_rag
             else None
         )
-        
-        self.video_segment_feature_vdb = (
-            self.vs_vector_db_storage_cls(
-                namespace="video_segment_feature",
-                global_config=asdict(self),
-                embedding_func=None, # we code the embedding process inside the insert() function.
-            )
+
+        self.video_segment_feature_vdb = self.vs_vector_db_storage_cls(
+            namespace="video_segment_feature",
+            global_config=asdict(self),
+            embedding_func=None,  # we code the embedding process inside the insert() function.
         )
-        
+
         self.llm.best_model_func = limit_async_func_call(self.llm.best_model_max_async)(
             partial(self.llm.best_model_func, hashing_kv=self.llm_response_cache)
         )
-        self.llm.cheap_model_func = limit_async_func_call(self.llm.cheap_model_max_async)(
-            partial(self.llm.cheap_model_func, hashing_kv=self.llm_response_cache)
-        )
+        self.llm.cheap_model_func = limit_async_func_call(
+            self.llm.cheap_model_max_async
+        )(partial(self.llm.cheap_model_func, hashing_kv=self.llm_response_cache))
 
     def insert_video(self, video_path_list=None):
         loop = always_get_an_event_loop()
         for video_path in video_path_list:
             # Step0: check the existence
-            video_name = os.path.basename(video_path).split('.')[0]
+            video_name = os.path.basename(video_path).split(".")[0]
             if video_name in self.video_segments._data:
-                logger.info(f"Find the video named {os.path.basename(video_path)} in storage and skip it.")
+                logger.info(
+                    f"Find the video named {os.path.basename(video_path)} in storage and skip it."
+                )
                 continue
-            loop.run_until_complete(self.video_path_db.upsert(
-                {video_name: video_path}
-            ))
-            
+            loop.run_until_complete(self.video_path_db.upsert({video_name: video_path}))
+
             # Step1: split the videos
             segment_index2name, segment_times_info = split_video(
-                video_path, 
-                self.working_dir, 
+                video_path,
+                self.working_dir,
                 self.video_segment_length,
                 self.rough_num_frames_per_segment,
                 self.audio_output_format,
             )
-            
+
             # Step2: obtain transcript with whisper
             transcripts = speech_to_text(
-                video_name, 
-                self.working_dir, 
+                video_name,
+                self.working_dir,
                 segment_index2name,
-                self.audio_output_format
+                self.audio_output_format,
             )
-            
+
             # Step3: saving video segments **as well as** obtain caption with vision language model
             manager = multiprocessing.Manager()
             captions = manager.dict()
             error_queue = manager.Queue()
-            
+
             process_saving_video_segments = multiprocessing.Process(
                 target=saving_video_segments,
                 args=(
@@ -243,9 +243,9 @@ class VideoRAG:
                     segment_times_info,
                     error_queue,
                     self.video_output_format,
-                )
+                ),
             )
-            
+
             process_segment_caption = multiprocessing.Process(
                 target=segment_caption,
                 args=(
@@ -256,21 +256,23 @@ class VideoRAG:
                     segment_times_info,
                     captions,
                     error_queue,
-                )
+                ),
             )
-            
+
             process_saving_video_segments.start()
             process_segment_caption.start()
             process_saving_video_segments.join()
             process_segment_caption.join()
-            
+
             # if raise error in this two, stop the processing
             while not error_queue.empty():
                 error_message = error_queue.get()
-                with open('error_log_videorag.txt', 'a', encoding='utf-8') as log_file:
-                    log_file.write(f"Video Name:{video_name} Error processing:\n{error_message}\n\n")
+                with open("error_log_videorag.txt", "a", encoding="utf-8") as log_file:
+                    log_file.write(
+                        f"Video Name:{video_name} Error processing:\n{error_message}\n\n"
+                    )
                 raise RuntimeError(error_message)
-            
+
             # Step4: insert video segments information
             segments_information = merge_segment_information(
                 segment_index2name,
@@ -279,25 +281,29 @@ class VideoRAG:
                 captions,
             )
             manager.shutdown()
-            loop.run_until_complete(self.video_segments.upsert(
-                {video_name: segments_information}
-            ))
-            
+            loop.run_until_complete(
+                self.video_segments.upsert({video_name: segments_information})
+            )
+
             # Step5: encode video segment features
-            loop.run_until_complete(self.video_segment_feature_vdb.upsert(
-                video_name,
-                segment_index2name,
-                self.video_output_format,
-            ))
-            
+            loop.run_until_complete(
+                self.video_segment_feature_vdb.upsert(
+                    video_name,
+                    segment_index2name,
+                    self.video_output_format,
+                )
+            )
+
             # Step6: delete the cache file
-            video_segment_cache_path = os.path.join(self.working_dir, '_cache', video_name)
+            video_segment_cache_path = os.path.join(
+                self.working_dir, "_cache", video_name
+            )
             if os.path.exists(video_segment_cache_path):
                 shutil.rmtree(video_segment_cache_path)
-            
+
             # Step 7: saving current video information
             loop.run_until_complete(self._save_video_segments())
-        
+
         loop.run_until_complete(self.ainsert(self.video_segments._data))
 
     def query(self, query: str, param: QueryParam = QueryParam()):
@@ -315,7 +321,7 @@ class VideoRAG:
                 self.video_segments,
                 self.video_segment_feature_vdb,
                 self.chunk_entity_relation_graph,
-                self.caption_model, 
+                self.caption_model,
                 self.caption_tokenizer,
                 param,
                 asdict(self),
@@ -331,7 +337,7 @@ class VideoRAG:
                 self.video_segments,
                 self.video_segment_feature_vdb,
                 self.chunk_entity_relation_graph,
-                self.caption_model, 
+                self.caption_model,
                 self.caption_tokenizer,
                 param,
                 asdict(self),
@@ -405,7 +411,7 @@ class VideoRAG:
                 continue
             tasks.append(cast(StorageNameSpace, storage_inst).index_done_callback())
         await asyncio.gather(*tasks)
-    
+
     async def _insert_done(self):
         tasks = []
         for storage_inst in [
