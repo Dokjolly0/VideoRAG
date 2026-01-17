@@ -4,15 +4,17 @@ import os
 from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any, Union, cast
+
 import networkx as nx
 import numpy as np
+from graspologic.utils import largest_connected_component
 
-from .._utils import logger
-from ..base import (
+from videorag._utils import logger
+from videorag.base import (
     BaseGraphStorage,
     SingleCommunitySchema,
 )
-from ..prompt import GRAPH_FIELD_SEP
+from videorag.prompt import GRAPH_FIELD_SEP
 
 
 @dataclass
@@ -21,7 +23,7 @@ class NetworkXStorage(BaseGraphStorage):
     def load_nx_graph(file_name) -> nx.Graph:
         if os.path.exists(file_name):
             return nx.read_graphml(file_name)
-        return None
+        return nx.Graph()
 
     @staticmethod
     def write_nx_graph(graph: nx.Graph, file_name):
@@ -35,11 +37,11 @@ class NetworkXStorage(BaseGraphStorage):
         """Refer to https://github.com/microsoft/graphrag/index/graph/utils/stable_lcc.py
         Return the largest connected component of the graph, with nodes and edges sorted in a stable way.
         """
-        from graspologic.utils import largest_connected_component
-
         graph = graph.copy()
         graph = cast(nx.Graph, largest_connected_component(graph))
-        node_mapping = {node: html.unescape(node.upper().strip()) for node in graph.nodes()}  # type: ignore
+        node_mapping = {
+            node: html.unescape(node.upper().strip()) for node in graph.nodes()
+        }  # type: ignore
         graph = nx.relabel_nodes(graph, node_mapping)
         return NetworkXStorage._stabilize_graph(graph)
 
@@ -49,10 +51,8 @@ class NetworkXStorage(BaseGraphStorage):
         Ensure an undirected graph with the same relationships will always be read the same way.
         """
         fixed_graph = nx.DiGraph() if graph.is_directed() else nx.Graph()
-
         sorted_nodes = graph.nodes(data=True)
         sorted_nodes = sorted(sorted_nodes, key=lambda x: x[0])
-
         fixed_graph.add_nodes_from(sorted_nodes)
         edges = list(graph.edges(data=True))
 
@@ -72,7 +72,6 @@ class NetworkXStorage(BaseGraphStorage):
             return f"{source} -> {target}"
 
         edges = sorted(edges, key=lambda x: _get_edge_key(x[0], x[1]))
-
         fixed_graph.add_edges_from(edges)
         return fixed_graph
 
@@ -138,15 +137,18 @@ class NetworkXStorage(BaseGraphStorage):
         await self._clustering_algorithms[algorithm]()
 
     async def community_schema(self) -> dict[str, SingleCommunitySchema]:
-        results = defaultdict(
-            lambda: dict(
-                level=None,
-                title=None,
-                edges=set(),
-                nodes=set(),
-                chunk_ids=set(),
-                occurrence=0.0,
-                sub_communities=[],
+        results: dict[str, SingleCommunitySchema] = defaultdict(
+            lambda: cast(
+                SingleCommunitySchema,
+                {
+                    "level": 0,
+                    "title": "",
+                    "edges": set[tuple[str, str]],
+                    "nodes": set[str],
+                    "chunk_ids": set[str],
+                    "occurrence": 0.0,
+                    "sub_communities": [],
+                },
             )
         )
         max_num_ids = 0
@@ -163,11 +165,11 @@ class NetworkXStorage(BaseGraphStorage):
                 levels[level].add(cluster_key)
                 results[cluster_key]["level"] = level
                 results[cluster_key]["title"] = f"Cluster {cluster_key}"
-                results[cluster_key]["nodes"].add(node_id)
-                results[cluster_key]["edges"].update(
+                results[cluster_key]["nodes"].append(node_id)
+                results[cluster_key]["edges"].extend(
                     [tuple(sorted(e)) for e in this_node_edges]
                 )
-                results[cluster_key]["chunk_ids"].update(
+                results[cluster_key]["chunk_ids"].extend(
                     node_data["source_id"].split(GRAPH_FIELD_SEP)
                 )
                 max_num_ids = max(max_num_ids, len(results[cluster_key]["chunk_ids"]))
@@ -182,12 +184,12 @@ class NetworkXStorage(BaseGraphStorage):
                 results[comm]["sub_communities"] = [
                     c
                     for c in next_level_comms
-                    if results[c]["nodes"].issubset(results[comm]["nodes"])
+                    if set(results[c]["nodes"]).issubset(set(results[comm]["nodes"]))
                 ]
 
         for k, v in results.items():
             v["edges"] = list(v["edges"])
-            v["edges"] = [list(e) for e in v["edges"]]
+            cast(list[tuple[str, str]], list({tuple(e) for e in v["edges"]}))
             v["nodes"] = list(v["nodes"])
             v["chunk_ids"] = list(v["chunk_ids"])
             v["occurrence"] = len(v["chunk_ids"]) / max_num_ids
@@ -213,7 +215,7 @@ class NetworkXStorage(BaseGraphStorage):
             level_key = partition.level
             cluster_id = partition.cluster
             node_communities[partition.node].append(
-                {"level": level_key, "cluster": cluster_id}
+                {"level": str(level_key), "cluster": str(cluster_id)}
             )
             __levels[level_key].add(cluster_id)
         node_communities = dict(node_communities)

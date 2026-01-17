@@ -6,9 +6,7 @@ Reference:
 GRAPH_FIELD_SEP = "<SEP>"
 PROMPTS = {}
 
-PROMPTS[
-    "entity_extraction"
-] = """-Goal-
+PROMPTS["entity_extraction"] = """-Goal-
 Given a text document that is potentially relevant to this activity and a list of entity types, identify all entities of those types from the text and all relationships among the identified entities.
 
 -Steps-
@@ -164,9 +162,7 @@ PROMPTS["default_text_separator"] = [
 ]
 
 
-PROMPTS[
-    "naive_rag_response"
-] = """---Role---
+PROMPTS["naive_rag_response"] = """---Role---
 
 You are a helpful assistant responding to a query with retrieved knowledge.
 
@@ -197,9 +193,7 @@ Please add sections and commentary as appropriate for the length and format if n
 """
 
 
-PROMPTS[
-    "query_rewrite_for_entity_retrieval"
-] = """-Goal-
+PROMPTS["query_rewrite_for_entity_retrieval"] = """-Goal-
 For a given query, generate a declarative sentence to serve as a query for retrieving relevant knowledge.
 
 ######################
@@ -230,10 +224,7 @@ Output:
 """
 
 
-
-PROMPTS[
-    "query_rewrite_for_visual_retrieval"
-] = """-Goal-
+PROMPTS["query_rewrite_for_visual_retrieval"] = """-Goal-
 Given a question that may include scene-related information, generate a declarative sentence to serve as a query for retrieving relevant video segments.
 
 ######################
@@ -264,10 +255,7 @@ Output:
 """
 
 
-
-PROMPTS[
-    "keywords_extraction"
-] = """- Goal -
+PROMPTS["keywords_extraction"] = """- Goal -
 Given a query, extract the relevant keywords that can help answer the query. Please list the keywords separated by commas.
 
 ######################
@@ -298,13 +286,10 @@ Output:
 """
 
 
-
-PROMPTS[
-    "filtering_segment"
-] = """---Role---
+PROMPTS["filtering_segment"] = """---Role---
 
 You are a helpful assistant to determine whether the video may contain information relevant to the knowledge based on its rough caption.
-Please note that this is a rough caption of the video segments, which means it may not directly contain the answer but may indicate that the video segment is likely to contain information relevant to answering the question. 
+Please note that this is a rough caption of the video segments, which means it may not directly contain the answer but may indicate that the video segment is likely to contain information relevant to answering the question.
 
 ---Video Caption---
 
@@ -320,10 +305,7 @@ Answer:
 """
 
 
-
-PROMPTS[
-    "videorag_response"
-] = """---Role---
+PROMPTS["videorag_response"] = """---Role---
 
 You are a helpful assistant responding to a query with retrieved knowledge.
 
@@ -359,16 +341,14 @@ Reference relevant video segments within the answers, specifying the video name 
 In one segment, the film highlights the devastating effects of deforestation on wildlife habitats [1]. Another part illustrates successful conservation efforts that have helped endangered species recover [2].
 
 #### Reference:
-[1] video_name_1, 05:30, 08:00  
-[2] video_name_2, 25:00, 28:00 
+[1] video_name_1, 05:30, 08:00
+[2] video_name_2, 25:00, 28:00
 
 ---Notice---
 Please add sections and commentary as appropriate for the length and format if necessary. Format the response in Markdown.
 """
 
-PROMPTS[
-    "videorag_response_wo_reference"
-] = """---Role---
+PROMPTS["videorag_response_wo_reference"] = """---Role---
 
 You are a helpful assistant responding to a query with retrieved knowledge.
 
@@ -402,9 +382,7 @@ Do not include information where the supporting evidence for it is not provided.
 Please add sections and commentary as appropriate for the length and format if necessary. Format the response in Markdown.
 """
 
-PROMPTS[
-    "videorag_response_for_multiple_choice_question"
-] = """---Role---
+PROMPTS["videorag_response_for_multiple_choice_question"] = """---Role---
 
 You are a helpful assistant responding to a multiple-choice question with retrieved knowledge.
 

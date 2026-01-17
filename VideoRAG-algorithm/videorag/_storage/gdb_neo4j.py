@@ -1,18 +1,31 @@
-import json
 import asyncio
+import json
 from collections import defaultdict
-from neo4j import AsyncGraphDatabase
 from dataclasses import dataclass
-from typing import Union
-from ..base import BaseGraphStorage, SingleCommunitySchema
-from .._utils import logger
-from ..prompt import GRAPH_FIELD_SEP
+from typing import List, Optional, Set, TypedDict, Union, cast
+
+from neo4j import AsyncGraphDatabase
+from utils.typing import LiteralString
+
+from videorag._utils import logger
+from videorag.base import BaseGraphStorage, SingleCommunitySchema
+from videorag.prompt import GRAPH_FIELD_SEP
 
 neo4j_lock = asyncio.Lock()
 
 
 def make_path_idable(path):
     return path.replace(".", "_").replace("/", "__").replace("-", "_")
+
+
+class CommunityData(TypedDict):
+    level: Optional[int]
+    title: Optional[str]
+    edges: Set[tuple[str, str]]
+    nodes: Set[str]
+    chunk_ids: Set[str]
+    occurrence: float
+    sub_communities: List[str]
 
 
 @dataclass
@@ -67,20 +80,28 @@ class Neo4jStorage(BaseGraphStorage):
         await self._init_workspace()
 
     async def has_node(self, node_id: str) -> bool:
+        query = cast(
+            LiteralString,
+            f"MATCH (n:{self.namespace}) WHERE n.id = $node_id RETURN COUNT(n) > 0 AS exists",
+        )
         async with self.async_driver.session() as session:
             result = await session.run(
-                f"MATCH (n:{self.namespace}) WHERE n.id = $node_id RETURN COUNT(n) > 0 AS exists",
+                query,
                 node_id=node_id,
             )
             record = await result.single()
             return record["exists"] if record else False
 
     async def has_edge(self, source_node_id: str, target_node_id: str) -> bool:
+        query = cast(
+            LiteralString,
+            f"MATCH (s:{self.namespace})-[r]->(t:{self.namespace}) "
+            "WHERE s.id = $source_id AND t.id = $target_id "
+            "RETURN COUNT(r) > 0 AS exists",
+        )
         async with self.async_driver.session() as session:
             result = await session.run(
-                f"MATCH (s:{self.namespace})-[r]->(t:{self.namespace}) "
-                "WHERE s.id = $source_id AND t.id = $target_id "
-                "RETURN COUNT(r) > 0 AS exists",
+                query,
                 source_id=source_node_id,
                 target_id=target_node_id,
             )
@@ -88,21 +109,29 @@ class Neo4jStorage(BaseGraphStorage):
             return record["exists"] if record else False
 
     async def node_degree(self, node_id: str) -> int:
+        query = cast(
+            LiteralString,
+            f"MATCH (n:{self.namespace}) WHERE n.id = $node_id "
+            f"RETURN COUNT {{(n)-[]-(:{self.namespace})}} AS degree",
+        )
         async with self.async_driver.session() as session:
             result = await session.run(
-                f"MATCH (n:{self.namespace}) WHERE n.id = $node_id "
-                f"RETURN COUNT {{(n)-[]-(:{self.namespace})}} AS degree",
+                query,
                 node_id=node_id,
             )
             record = await result.single()
             return record["degree"] if record else 0
 
     async def edge_degree(self, src_id: str, tgt_id: str) -> int:
+        query = cast(
+            LiteralString,
+            f"MATCH (s:{self.namespace}), (t:{self.namespace}) "
+            "WHERE s.id = $src_id AND t.id = $tgt_id "
+            f"RETURN COUNT {{(s)-[]-(:{self.namespace})}} + COUNT {{(t)-[]-(:{self.namespace})}} AS degree",
+        )
         async with self.async_driver.session() as session:
             result = await session.run(
-                f"MATCH (s:{self.namespace}), (t:{self.namespace}) "
-                "WHERE s.id = $src_id AND t.id = $tgt_id "
-                f"RETURN COUNT {{(s)-[]-(:{self.namespace})}} + COUNT {{(t)-[]-(:{self.namespace})}} AS degree",
+                query,
                 src_id=src_id,
                 tgt_id=tgt_id,
             )
@@ -110,9 +139,13 @@ class Neo4jStorage(BaseGraphStorage):
             return record["degree"] if record else 0
 
     async def get_node(self, node_id: str) -> Union[dict, None]:
+        query = cast(
+            LiteralString,
+            f"MATCH (n:{self.namespace}) WHERE n.id = $node_id RETURN properties(n) AS node_data",
+        )
         async with self.async_driver.session() as session:
             result = await session.run(
-                f"MATCH (n:{self.namespace}) WHERE n.id = $node_id RETURN properties(n) AS node_data",
+                query,
                 node_id=node_id,
             )
             record = await result.single()
@@ -135,11 +168,15 @@ class Neo4jStorage(BaseGraphStorage):
     async def get_edge(
         self, source_node_id: str, target_node_id: str
     ) -> Union[dict, None]:
+        query = cast(
+            LiteralString,
+            f"MATCH (s:{self.namespace})-[r]->(t:{self.namespace}) "
+            "WHERE s.id = $source_id AND t.id = $target_id "
+            "RETURN properties(r) AS edge_data",
+        )
         async with self.async_driver.session() as session:
             result = await session.run(
-                f"MATCH (s:{self.namespace})-[r]->(t:{self.namespace}) "
-                "WHERE s.id = $source_id AND t.id = $target_id "
-                "RETURN properties(r) AS edge_data",
+                query,
                 source_id=source_node_id,
                 target_id=target_node_id,
             )
@@ -149,10 +186,14 @@ class Neo4jStorage(BaseGraphStorage):
     async def get_node_edges(
         self, source_node_id: str
     ) -> Union[list[tuple[str, str]], None]:
+        query = cast(
+            LiteralString,
+            f"MATCH (s:{self.namespace})-[r]->(t:{self.namespace}) WHERE s.id = $source_id "
+            "RETURN s.id AS source, t.id AS target",
+        )
         async with self.async_driver.session() as session:
             result = await session.run(
-                f"MATCH (s:{self.namespace})-[r]->(t:{self.namespace}) WHERE s.id = $source_id "
-                "RETURN s.id AS source, t.id AS target",
+                query,
                 source_id=source_node_id,
             )
             edges = []
@@ -162,10 +203,14 @@ class Neo4jStorage(BaseGraphStorage):
 
     async def upsert_node(self, node_id: str, node_data: dict[str, str]):
         node_type = node_data.get("entity_type", "UNKNOWN").strip('"')
+        query = cast(
+            LiteralString,
+            f"MERGE (n:{self.namespace}:{node_type} {{id: $node_id}}) "
+            "SET n += $node_data",
+        )
         async with self.async_driver.session() as session:
             await session.run(
-                f"MERGE (n:{self.namespace}:{node_type} {{id: $node_id}}) "
-                "SET n += $node_data",
+                query,
                 node_id=node_id,
                 node_data=node_data,
             )
@@ -173,13 +218,17 @@ class Neo4jStorage(BaseGraphStorage):
     async def upsert_edge(
         self, source_node_id: str, target_node_id: str, edge_data: dict[str, str]
     ):
-        edge_data.setdefault("weight", 0.0)
+        edge_data.setdefault("weight", str(0.0))
+        query = cast(
+            LiteralString,
+            f"MATCH (s:{self.namespace}), (t:{self.namespace}) "
+            "WHERE s.id = $source_id AND t.id = $target_id "
+            "MERGE (s)-[r:RELATED]->(t) "  # Added relationship type 'RELATED'
+            "SET r += $edge_data",
+        )
         async with self.async_driver.session() as session:
             await session.run(
-                f"MATCH (s:{self.namespace}), (t:{self.namespace}) "
-                "WHERE s.id = $source_id AND t.id = $target_id "
-                "MERGE (s)-[r:RELATED]->(t) "  # Added relationship type 'RELATED'
-                "SET r += $edge_data",
+                query,
                 source_id=source_node_id,
                 target_id=target_node_id,
                 edge_data=edge_data,
@@ -193,56 +242,64 @@ class Neo4jStorage(BaseGraphStorage):
 
         random_seed = self.global_config["graph_cluster_seed"]
         max_level = self.global_config["max_graph_cluster_size"]
+        first_query = cast(
+            LiteralString,
+            f"""
+                CALL gds.graph.project(
+                    'graph_{self.namespace}',
+                    ['{self.namespace}'],
+                    {{
+                        RELATED: {{
+                            orientation: 'UNDIRECTED',
+                            properties: ['weight']
+                        }}
+                    }}
+                )
+                """,
+        )
+        second_query = cast(
+            LiteralString,
+            f"""
+            CALL gds.leiden.write(
+                'graph_{self.namespace}',
+                {{
+                    writeProperty: 'communityIds',
+                    includeIntermediateCommunities: True,
+                    relationshipWeightProperty: "weight",
+                    maxLevels: {max_level},
+                    tolerance: 0.0001,
+                    gamma: 1.0,
+                    theta: 0.01,
+                    randomSeed: {random_seed}
+                }}
+            )
+            YIELD communityCount, modularities;
+            """,
+        )
         async with self.async_driver.session() as session:
             try:
                 # Project the graph with undirected relationships
-                await session.run(
-                    f"""
-                    CALL gds.graph.project(
-                        'graph_{self.namespace}',
-                        ['{self.namespace}'],
-                        {{
-                            RELATED: {{
-                                orientation: 'UNDIRECTED',
-                                properties: ['weight']
-                            }}
-                        }}
-                    )
-                    """
-                )
+                await session.run(first_query)
 
                 # Run Leiden algorithm
-                result = await session.run(
-                    f"""
-                    CALL gds.leiden.write(
-                        'graph_{self.namespace}',
-                        {{
-                            writeProperty: 'communityIds',
-                            includeIntermediateCommunities: True,
-                            relationshipWeightProperty: "weight",
-                            maxLevels: {max_level},
-                            tolerance: 0.0001,
-                            gamma: 1.0,
-                            theta: 0.01,
-                            randomSeed: {random_seed}
-                        }}
-                    )
-                    YIELD communityCount, modularities;
-                    """
-                )
+                result = await session.run(second_query)
                 result = await result.single()
-                community_count: int = result["communityCount"]
-                modularities = result["modularities"]
-                logger.info(
-                    f"Performed graph clustering with {community_count} communities and modularities {modularities}"
-                )
+                if result:
+                    community_count: int = result["communityCount"]
+                    modularities = result["modularities"]
+                    logger.info(
+                        f"Performed graph clustering with {community_count} communities and modularities {modularities}"
+                    )
             finally:
                 # Drop the projected graph
-                await session.run(f"CALL gds.graph.drop('graph_{self.namespace}')")
+                query = cast(
+                    LiteralString, f"CALL gds.graph.drop('graph_{self.namespace}')"
+                )
+                await session.run(query)
 
     async def community_schema(self) -> dict[str, SingleCommunitySchema]:
-        results = defaultdict(
-            lambda: dict(
+        results: dict[str, CommunityData] = defaultdict(
+            lambda: CommunityData(
                 level=None,
                 title=None,
                 edges=set(),
@@ -255,15 +312,17 @@ class Neo4jStorage(BaseGraphStorage):
 
         async with self.async_driver.session() as session:
             # Fetch community data
-            result = await session.run(
+            query = cast(
+                LiteralString,
                 f"""
                 MATCH (n:{self.namespace})
                 WITH n, n.communityIds AS communityIds, [(n)-[]-(m:{self.namespace}) | m.id] AS connected_nodes
-                RETURN n.id AS node_id, n.source_id AS source_id, 
-                       communityIds AS cluster_key,
-                       connected_nodes
-                """
+                RETURN n.id AS node_id, n.source_id AS source_id,
+                    communityIds AS cluster_key,
+                    connected_nodes
+                """,
             )
+            result = await session.run(query)
 
             # records = await result.fetch()
 
@@ -279,36 +338,53 @@ class Neo4jStorage(BaseGraphStorage):
                     results[cluster_key]["level"] = level
                     results[cluster_key]["title"] = f"Cluster {cluster_key}"
                     results[cluster_key]["nodes"].add(node_id)
-                    results[cluster_key]["edges"].update(
-                        [
-                            tuple(sorted([node_id, str(connected)]))
-                            for connected in connected_nodes
-                            if connected != node_id
-                        ]
-                    )
+
+                    # Edges
+                    edge_tuples = []
+                    for connected in connected_nodes:
+                        if connected != node_id:
+                            # sorted returns [a, b], we unpack it into a fixed (str, str) tuple
+                            a, b = sorted([node_id, str(connected)])
+                            edge_tuples.append((a, b))
+
+                    results[cluster_key]["edges"].update(edge_tuples)
                     chunk_ids = source_id.split(GRAPH_FIELD_SEP)
                     results[cluster_key]["chunk_ids"].update(chunk_ids)
                     max_num_ids = max(
                         max_num_ids, len(results[cluster_key]["chunk_ids"])
                     )
 
-            # Process results
-            for k, v in results.items():
-                v["edges"] = [list(e) for e in v["edges"]]
-                v["nodes"] = list(v["nodes"])
-                v["chunk_ids"] = list(v["chunk_ids"])
-                v["occurrence"] = len(v["chunk_ids"]) / max_num_ids
-
-            # Compute sub-communities (this is a simplified approach)
+            denominator = max_num_ids if max_num_ids > 0 else 1
             for cluster in results.values():
+                cluster["occurrence"] = len(cluster["chunk_ids"]) / denominator
                 cluster["sub_communities"] = [
                     sub_key
                     for sub_key, sub_cluster in results.items()
-                    if sub_cluster["level"] > cluster["level"]
-                    and set(sub_cluster["nodes"]).issubset(set(cluster["nodes"]))
+                    if (
+                        sub_cluster["level"] is not None
+                        and cluster["level"] is not None
+                        and sub_cluster["level"] > cluster["level"]
+                        and sub_cluster["nodes"].issubset(cluster["nodes"])
+                    )
                 ]
 
-        return dict(results)
+            # 2. Convert to the final schema format
+            final_output: dict[str, SingleCommunitySchema] = {}
+
+            for k, v in results.items():
+                # Create the dict literal and tell Pyright exactly what it is
+                schema_item: SingleCommunitySchema = {
+                    "level": v["level"] if v["level"] is not None else 0,
+                    "title": v["title"] if v["title"] is not None else "",
+                    "edges": list(v["edges"]),
+                    "nodes": list(v["nodes"]),
+                    "chunk_ids": list(v["chunk_ids"]),
+                    "occurrence": v["occurrence"],
+                    "sub_communities": v["sub_communities"],
+                }
+                final_output[k] = schema_item
+
+        return final_output
 
     async def index_done_callback(self):
         await self.async_driver.close()
@@ -317,10 +393,14 @@ class Neo4jStorage(BaseGraphStorage):
         async with self.async_driver.session() as session:
             try:
                 # Delete all relationships in the namespace
-                await session.run(f"MATCH (n:{self.namespace})-[r]-() DELETE r")
+                query1 = cast(
+                    LiteralString, f"MATCH (n:{self.namespace})-[r]-() DELETE r"
+                )
+                await session.run(query1)
 
                 # Delete all nodes in the namespace
-                await session.run(f"MATCH (n:{self.namespace}) DELETE n")
+                query2 = cast(LiteralString, f"MATCH (n:{self.namespace}) DELETE n")
+                await session.run(query2)
 
                 logger.info(
                     f"All nodes and edges in namespace '{self.namespace}' have been deleted."

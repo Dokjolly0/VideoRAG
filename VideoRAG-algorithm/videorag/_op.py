@@ -2,13 +2,12 @@ import asyncio
 import json
 import re
 from collections import Counter, defaultdict
-from typing import Union
+from typing import Any, Awaitable, Callable, Optional, Tuple, TypeAlias, Union
 
-import openai
 import tiktoken
 
-from ._splitter import SeparatorSplitter
-from ._utils import (
+from videorag._splitter import SeparatorSplitter
+from videorag._utils import (
     clean_str,
     compute_mdhash_id,
     decode_tokens_by_tiktoken,
@@ -20,19 +19,25 @@ from ._utils import (
     split_string_by_multi_markers,
     truncate_list_by_token_size,
 )
-from ._videoutil import (
+from videorag._videoutil import (
     retrieved_segment_caption,
 )
-from .base import (
+from videorag.base import (
     BaseGraphStorage,
     BaseKVStorage,
     BaseVectorStorage,
-    CommunitySchema,
     QueryParam,
-    SingleCommunitySchema,
     TextChunkSchema,
 )
-from .prompt import GRAPH_FIELD_SEP, PROMPTS
+from videorag.prompt import GRAPH_FIELD_SEP, PROMPTS
+
+ExtractEntitiesResult: TypeAlias = Optional[
+    tuple[
+        BaseGraphStorage,
+        list[dict[str, str]],
+        list[dict[str, Any]],
+    ]
+]
 
 
 def chunking_by_token_size(
@@ -61,7 +66,6 @@ def chunking_by_token_size(
                     "full_doc_id": doc_keys[index],
                 }
             )
-
     return results
 
 
@@ -114,7 +118,6 @@ def chunking_by_video_segments(
                 "video_segment_id": chunk_segment_ids,
             }
         )
-
     return results
 
 
@@ -148,7 +151,6 @@ def chunking_by_seperators(
                     "full_doc_id": doc_keys[index],
                 }
             )
-
     return results
 
 
@@ -176,11 +178,13 @@ def get_chunks(new_videos, chunk_func=chunking_by_video_segments, **chunk_func_p
 
 
 async def _handle_entity_relation_summary(
-    entity_or_relation_name: str,
+    entity_or_relation_name: Union[str, Tuple[str, str]],
     description: str,
     global_config: dict,
 ) -> str:
-    use_llm_func: callable = global_config["llm"]["cheap_model_func"]
+    use_llm_func: Callable[..., Awaitable[str]] = global_config["llm"][
+        "cheap_model_func"
+    ]
     llm_max_tokens = global_config["llm"]["cheap_model_max_token_size"]
     tiktoken_model_name = global_config["tiktoken_model_name"]
     summary_max_tokens = global_config["entity_summary_to_max_tokens"]
@@ -306,12 +310,15 @@ async def _merge_edges_then_upsert(
     already_order = []
     if await knowledge_graph_inst.has_edge(src_id, tgt_id):
         already_edge = await knowledge_graph_inst.get_edge(src_id, tgt_id)
-        already_weights.append(already_edge["weight"])
-        already_source_ids.extend(
-            split_string_by_multi_markers(already_edge["source_id"], [GRAPH_FIELD_SEP])
-        )
-        already_description.append(already_edge["description"])
-        already_order.append(already_edge.get("order", 1))
+        if already_edge:
+            already_weights.append(already_edge["weight"])
+            already_source_ids.extend(
+                split_string_by_multi_markers(
+                    already_edge["source_id"], [GRAPH_FIELD_SEP]
+                )
+            )
+            already_description.append(already_edge["description"])
+            already_order.append(already_edge.get("order", 1))
 
     # [numberchiffre]: `Relationship.order` is only returned from DSPy's predictions
     order = min([dp.get("order", 1) for dp in edges_data] + already_order)
@@ -339,7 +346,10 @@ async def _merge_edges_then_upsert(
         src_id,
         tgt_id,
         edge_data=dict(
-            weight=weight, description=description, source_id=source_id, order=order
+            weight=str(weight),
+            description=description,
+            source_id=source_id,
+            order=order,
         ),
     )
     return_edge_data = dict(
@@ -353,8 +363,10 @@ async def extract_entities(
     knowledge_graph_inst: BaseGraphStorage,
     entity_vdb: BaseVectorStorage,
     global_config: dict,
-) -> Union[BaseGraphStorage, None]:
-    use_llm_func: callable = global_config["llm"]["best_model_func"]
+) -> ExtractEntitiesResult:
+    use_llm_func: Callable[..., Awaitable[str]] = global_config["llm"][
+        "best_model_func"
+    ]
     entity_extract_max_gleaning = global_config["entity_extract_max_gleaning"]
 
     ordered_chunks = list(chunks.items())
@@ -512,7 +524,7 @@ async def _find_most_related_segments_from_entities(
             if c_id in all_text_units_lookup:
                 continue
             relation_counts = 0
-            for e in this_edges:
+            for e in this_edges or []:
                 if (
                     e[1] in all_one_hop_text_units_lookup
                     and c_id in all_one_hop_text_units_lookup[e[1]]
@@ -545,7 +557,9 @@ async def _refine_entity_retrieval_query(
     query_param: QueryParam,
     global_config: dict,
 ):
-    use_llm_func: callable = global_config["llm"]["cheap_model_func"]
+    use_llm_func: Callable[..., Awaitable[str]] = global_config["llm"][
+        "cheap_model_func"
+    ]
     query_rewrite_prompt = PROMPTS["query_rewrite_for_entity_retrieval"]
     query_rewrite_prompt = query_rewrite_prompt.format(input_text=query)
     final_result = await use_llm_func(query_rewrite_prompt)
@@ -557,7 +571,9 @@ async def _refine_visual_retrieval_query(
     query_param: QueryParam,
     global_config: dict,
 ):
-    use_llm_func: callable = global_config["llm"]["cheap_model_func"]
+    use_llm_func: Callable[..., Awaitable[str]] = global_config["llm"][
+        "cheap_model_func"
+    ]
     query_rewrite_prompt = PROMPTS["query_rewrite_for_visual_retrieval"]
     query_rewrite_prompt = query_rewrite_prompt.format(input_text=query)
     final_result = await use_llm_func(query_rewrite_prompt)
@@ -569,7 +585,9 @@ async def _extract_keywords_query(
     query_param: QueryParam,
     global_config: dict,
 ):
-    use_llm_func: callable = global_config["llm"]["cheap_model_func"]
+    use_llm_func: Callable[..., Awaitable[str]] = global_config["llm"][
+        "cheap_model_func"
+    ]
     keywords_prompt = PROMPTS["keywords_extraction"]
     keywords_prompt = keywords_prompt.format(input_text=query)
     final_result = await use_llm_func(keywords_prompt)

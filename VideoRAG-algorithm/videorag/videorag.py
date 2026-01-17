@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from functools import partial
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Type, Union, cast
+from typing import Callable, Dict, List, Type, Union, cast
 
 import tiktoken
 from transformers import AutoModel, AutoTokenizer
@@ -195,12 +195,12 @@ class VideoRAG:
             self.llm.cheap_model_max_async
         )(partial(self.llm.cheap_model_func, hashing_kv=self.llm_response_cache))
 
-    def insert_video(self, video_path_list=None):
+    def insert_video(self, video_path_list=[]):
         loop = always_get_an_event_loop()
         for video_path in video_path_list:
             # Step0: check the existence
             video_name = os.path.basename(video_path).split(".")[0]
-            if video_name in self.video_segments._data:
+            if video_name in self.video_segments.has(video_name):
                 logger.info(
                     f"Find the video named {os.path.basename(video_path)} in storage and skip it."
                 )
@@ -287,14 +287,14 @@ class VideoRAG:
                 self.video_segments.upsert({video_name: segments_information})
             )
 
-            # Step5: encode video segment features
-            loop.run_until_complete(
-                self.video_segment_feature_vdb.upsert(
-                    video_name,
-                    segment_index2name,
-                    self.video_output_format,
-                )
-            )
+            # Step5: encode video segment features - NotImplemented
+            # loop.run_until_complete(
+            #     self.video_segment_feature_vdb.upsert(
+            #         video_name,
+            #         segment_index2name,
+            #         self.video_output_format,
+            #     )
+            # )
 
             # Step6: delete the cache file
             video_segment_cache_path = os.path.join(
@@ -375,7 +375,7 @@ class VideoRAG:
                 logger.warning("All chunks are already in the storage")
                 return
             logger.info(f"[New Chunks] inserting {len(inserting_chunks)} chunks")
-            if self.enable_naive_rag:
+            if self.enable_naive_rag and self.chunks_vdb:
                 logger.info("Insert chunks for naive RAG")
                 await self.chunks_vdb.upsert(inserting_chunks)
 

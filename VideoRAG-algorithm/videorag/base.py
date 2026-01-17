@@ -1,14 +1,16 @@
 from dataclasses import dataclass, field
-from typing import TypedDict, Union, Literal, Generic, TypeVar
+from typing import Generic, Literal, TypedDict, TypeVar, Union
 
 import numpy as np
 
-from ._utils import EmbeddingFunc
+from videorag._utils import EmbeddingFunc
 
 
 @dataclass
 class QueryParam:
-    mode: Literal["local", "global", "naive"] = "global"
+    mode: Literal[
+        "local", "global", "naive", "videorag", "videorag_multiple_choice"
+    ] = "global"
     response_type: str = "Multiple Paragraphs"
     level: int = 2
     top_k: int = 20
@@ -29,7 +31,7 @@ SingleCommunitySchema = TypedDict(
     {
         "level": int,
         "title": str,
-        "edges": list[list[str, str]],
+        "edges": list[tuple[str, str]],
         "nodes": list[str],
         "chunk_ids": list[str],
         "occurrence": float,
@@ -72,7 +74,7 @@ class BaseVectorStorage(StorageNameSpace):
     async def query(self, query: str, top_k: int) -> list[dict]:
         raise NotImplementedError
 
-    async def upsert(self, data: dict[str, dict]):
+    async def upsert(self, *args, **kwargs):
         """Use 'content' field from value for embedding, use key as id.
         If embedding_func is None, use 'embedding' field from value
         """
@@ -81,6 +83,9 @@ class BaseVectorStorage(StorageNameSpace):
 
 @dataclass
 class BaseKVStorage(Generic[T], StorageNameSpace):
+    async def has(self, key: str) -> bool:
+        raise NotImplementedError
+
     async def all_keys(self) -> list[str]:
         raise NotImplementedError
 

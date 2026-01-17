@@ -1,14 +1,15 @@
 import asyncio
 import os
+import pickle
 from dataclasses import dataclass, field
 from typing import Any
-import pickle
+
 import hnswlib
 import numpy as np
 import xxhash
 
-from .._utils import logger
-from ..base import BaseVectorStorage
+from videorag._utils import logger
+from videorag.base import BaseVectorStorage
 
 
 @dataclass
@@ -67,7 +68,7 @@ class HNSWVectorStorage(BaseVectorStorage):
         logger.info(f"Inserting {len(data)} vectors to {self.namespace}")
         if not data:
             logger.warning("You insert an empty data to vector DB")
-            return []
+            return np.array([], dtype=float)
 
         if self._current_elements + len(data) > self.max_elements:
             raise ValueError(

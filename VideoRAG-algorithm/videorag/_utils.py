@@ -2,13 +2,13 @@ import asyncio
 import html
 import json
 import logging
+import numbers
 import os
 import re
-import numbers
 from dataclasses import dataclass
 from functools import wraps
 from hashlib import md5
-from typing import Any, Union
+from typing import Any, Awaitable, Callable, Union
 
 import numpy as np
 import tiktoken
@@ -65,7 +65,9 @@ def decode_tokens_by_tiktoken(tokens: list[int], model_name: str = "gpt-4o"):
     return content
 
 
-def truncate_list_by_token_size(list_data: list, key: callable, max_token_size: int):
+def truncate_list_by_token_size(
+    list_data: list, key: Callable[[Any], str], max_token_size: int
+):
     """Truncate a list of data by token size"""
     if max_token_size <= 0:
         return []
@@ -155,22 +157,24 @@ class EmbeddingFunc:
     embedding_dim: int
     max_token_size: int
     model_name: str
-    func: callable
+    func: Callable[..., Awaitable[np.ndarray]]
 
     async def __call__(self, *args, **kwargs) -> np.ndarray:
         # Had to fix this as the embedding function took only one named argument put it's passed in
         # positionally, now we need to pass both
-        kwargs['model_name'] = self.model_name
-        
+        kwargs["model_name"] = self.model_name
+
         # If there are positional arguments, convert them to keyword arguments
         if args:
             # Assuming the first positional argument is always 'texts'
             if len(args) == 1 and isinstance(args[0], list):
-                kwargs['texts'] = args[0]
+                kwargs["texts"] = args[0]
             else:
-                raise ValueError("Unexpected positional arguments. Expected a single list of texts")
+                raise ValueError(
+                    "Unexpected positional arguments. Expected a single list of texts"
+                )
         # Call the function with the updated keyword arguments
-        return await self.func(**kwargs)        
+        return await self.func(**kwargs)
 
 
 # Decorators ------------------------------------------------------------------------

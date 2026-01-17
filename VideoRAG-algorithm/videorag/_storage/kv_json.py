@@ -1,8 +1,8 @@
 import os
 from dataclasses import dataclass
 
-from .._utils import load_json, logger, write_json
-from ..base import (
+from videorag._utils import load_json, logger, write_json
+from videorag.base import (
     BaseKVStorage,
 )
 
@@ -17,6 +17,9 @@ class JsonKVStorage(BaseKVStorage):
 
     async def all_keys(self) -> list[str]:
         return list(self._data.keys())
+
+    async def has(self, key: str) -> bool:
+        return key in self._data
 
     async def index_done_callback(self):
         write_json(self._data, self._file_name)
