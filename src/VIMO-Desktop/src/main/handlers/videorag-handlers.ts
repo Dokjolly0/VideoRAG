@@ -77,6 +77,7 @@ export function startVideoRAGService(): Promise<boolean> {
           "..",
           "..",
           "..",
+          "src",
           "VideoRAG-algorithm",
           "api",
           "videorag_api.py",
@@ -84,10 +85,9 @@ export function startVideoRAGService(): Promise<boolean> {
         const scriptDir = path.dirname(scriptPath);
 
         console.log(`✅ Python script path: ${scriptPath}`);
-
         pythonProcess = spawn("python", ["-u", scriptPath], {
           // -u for unbuffered output
-          shell: true, // Use shell to solve PATH issues on Windows
+          shell: false, // Use shell to solve PATH issues on Windows
           stdio: ["pipe", "pipe", "pipe"],
           cwd: scriptDir,
           env: { ...process.env },
@@ -330,7 +330,10 @@ async function initializeVideoRAGConfig(): Promise<void> {
 
     // 2. Dynamically build ImageBind model path
     let imagebindModelPath = "";
-    if (settings.storeDirectory) {
+    if (settings.imagebindPath) {
+      imagebindModelPath = settings.imagebindPath;
+      console.log("🔧 Using user-defined ImageBind path:", imagebindModelPath);
+    } else if (settings.storeDirectory) {
       imagebindModelPath = require("path").join(
         settings.storeDirectory,
         "imagebind_huge",
@@ -578,7 +581,7 @@ async function loadSettingsFromFile(): Promise<{
 // IPC handlers setup
 export function setupVideoRAGHandlers() {
   // Manually start service
-  ipcMain.on("videorag:start-service", async () => {
+  ipcMain.handle("videorag:start-service", async () => {
     try {
       const isDev = process.env.NODE_ENV === "development";
 
@@ -611,7 +614,7 @@ export function setupVideoRAGHandlers() {
   });
 
   // Manually stop service
-  ipcMain.on("videorag:stop-service", async () => {
+  ipcMain.handle("videorag:stop-service", async () => {
     try {
       const isDev = process.env.NODE_ENV === "development";
 
@@ -632,7 +635,7 @@ export function setupVideoRAGHandlers() {
   });
 
   // Get service status
-  ipcMain.on("videorag:service-status", async () => {
+  ipcMain.handle("videorag:service-status", async () => {
     try {
       const isDev = process.env.NODE_ENV === "development";
 
@@ -659,7 +662,7 @@ export function setupVideoRAGHandlers() {
   });
 
   // Check API health status
-  ipcMain.on("videorag:health-check", async () => {
+  ipcMain.handle("videorag:health-check", async () => {
     try {
       const result = await callVideoRAGAPI("/health");
       return { success: true, data: result };
@@ -669,7 +672,7 @@ export function setupVideoRAGHandlers() {
   });
 
   // Set global configuration
-  ipcMain.on("videorag:initialize", async (_, config) => {
+  ipcMain.handle("videorag:initialize", async (_, config) => {
     try {
       const result = await callVideoRAGAPI("/initialize", "POST", config);
       return { success: true, data: result };
@@ -679,7 +682,7 @@ export function setupVideoRAGHandlers() {
   });
 
   // Upload video for specific session and start indexing
-  ipcMain.on(
+  ipcMain.handle(
     "videorag:upload-video",
     async (
       _,
@@ -704,7 +707,7 @@ export function setupVideoRAGHandlers() {
   );
 
   // Get indexing status for specific session
-  ipcMain.on(
+  ipcMain.handle(
     "videorag:get-status",
     async (_, chatId: string, type?: string) => {
       try {
@@ -720,7 +723,7 @@ export function setupVideoRAGHandlers() {
   );
 
   // Get list of indexed videos for specific session
-  ipcMain.on("videorag:list-indexed", async (_, chatId: string) => {
+  ipcMain.handle("videorag:list-indexed", async (_, chatId: string) => {
     try {
       const result = await callVideoRAGAPI(
         `/sessions/${chatId}/videos/indexed`,
@@ -732,7 +735,7 @@ export function setupVideoRAGHandlers() {
   });
 
   // Get status for specific session
-  ipcMain.on("videorag:session-status", async (_, chatId: string) => {
+  ipcMain.handle("videorag:session-status", async (_, chatId: string) => {
     try {
       const result = await callVideoRAGAPI(`/sessions/${chatId}/status`);
       return { success: true, data: result };
@@ -742,7 +745,7 @@ export function setupVideoRAGHandlers() {
   });
 
   // Query video content for specific session (to be implemented)
-  ipcMain.on(
+  ipcMain.handle(
     "videorag:query",
     async (_, chatId: string, query: string, mode: string = "videorag") => {
       try {
@@ -759,7 +762,7 @@ export function setupVideoRAGHandlers() {
   );
 
   // New: start query processing
-  ipcMain.on(
+  ipcMain.handle(
     "videorag:query-video",
     async (_, chatId: string, query: string) => {
       try {
@@ -776,7 +779,7 @@ export function setupVideoRAGHandlers() {
   );
 
   // Get system status
-  ipcMain.on("videorag:system-status", async () => {
+  ipcMain.handle("videorag:system-status", async () => {
     try {
       const result = await callVideoRAGAPI("/system/status");
       return { success: true, data: result };
@@ -786,28 +789,31 @@ export function setupVideoRAGHandlers() {
   });
 
   // Get video duration
-  ipcMain.on("videorag:get-video-duration", async (_, videoPath: string) => {
-    try {
-      console.log(`📄 Getting video duration for: ${videoPath}`);
-      // Video duration detection may take a long time, especially for large files
-      const result = await callVideoRAGAPI(
-        "/video/duration",
-        "POST",
-        { video_path: videoPath },
-        60000,
-      );
-      return { success: true, ...result };
-    } catch (error: any) {
-      console.error(
-        `❌ Failed to get video duration for ${videoPath}:`,
-        error.message,
-      );
-      return { success: false, error: error.message };
-    }
-  });
+  ipcMain.handle(
+    "videorag:get-video-duration",
+    async (_, videoPath: string) => {
+      try {
+        console.log(`📄 Getting video duration for: ${videoPath}`);
+        // Video duration detection may take a long time, especially for large files
+        const result = await callVideoRAGAPI(
+          "/video/duration",
+          "POST",
+          { video_path: videoPath },
+          60000,
+        );
+        return { success: true, ...result };
+      } catch (error: any) {
+        console.error(
+          `❌ Failed to get video duration for ${videoPath}:`,
+          error.message,
+        );
+        return { success: false, error: error.message };
+      }
+    },
+  );
 
   // New: handler to get localStorage configuration from renderer process
-  ipcMain.on("videorag:get-localStorage-config", async () => {
+  ipcMain.handle("videorag:get-localStorage-config", async () => {
     try {
       // This handler will be called by the renderer process, to get the configuration from localStorage
       // Actual localStorage reading needs to be done in the renderer process
@@ -821,7 +827,7 @@ export function setupVideoRAGHandlers() {
   });
 
   // New: manually reinitialize configuration
-  ipcMain.on("videorag:reinitialize-config", async () => {
+  ipcMain.handle("videorag:reinitialize-config", async () => {
     try {
       await initializeVideoRAGConfig();
       return {
@@ -834,7 +840,7 @@ export function setupVideoRAGHandlers() {
   });
 
   // Delete specific session and its resources
-  ipcMain.on("videorag:delete-session", async (_, chatId: string) => {
+  ipcMain.handle("videorag:delete-session", async (_, chatId: string) => {
     try {
       const result = await callVideoRAGAPI(
         `/sessions/${chatId}/delete`,
@@ -847,7 +853,7 @@ export function setupVideoRAGHandlers() {
   });
 
   // Load ImageBind model
-  ipcMain.on("videorag:load-imagebind", async () => {
+  ipcMain.handle("videorag:load-imagebind", async () => {
     try {
       const result = await callVideoRAGAPI("/imagebind/load", "POST");
       return { success: true, data: result };
@@ -857,7 +863,7 @@ export function setupVideoRAGHandlers() {
   });
 
   // Release ImageBind model
-  ipcMain.on("videorag:release-imagebind", async () => {
+  ipcMain.handle("videorag:release-imagebind", async () => {
     try {
       const result = await callVideoRAGAPI("/imagebind/release", "POST");
       return { success: true, data: result };
@@ -867,7 +873,7 @@ export function setupVideoRAGHandlers() {
   });
 
   // Get ImageBind status
-  ipcMain.on("videorag:imagebind-status", async () => {
+  ipcMain.handle("videorag:imagebind-status", async () => {
     try {
       const result = await callVideoRAGAPI("/imagebind/status", "GET");
       return { success: true, data: result };
@@ -877,7 +883,7 @@ export function setupVideoRAGHandlers() {
   });
 
   // Application restart
-  ipcMain.on("app:restart", async () => {
+  ipcMain.handle("app:restart", async () => {
     try {
       const { app } = await import("electron");
       app.relaunch();
@@ -889,7 +895,7 @@ export function setupVideoRAGHandlers() {
   });
 
   // Clean configuration file
-  ipcMain.on("app:clear-config", async () => {
+  ipcMain.handle("app:clear-config", async () => {
     try {
       const { unlink } = await import("node:fs/promises");
       const { join } = await import("node:path");
