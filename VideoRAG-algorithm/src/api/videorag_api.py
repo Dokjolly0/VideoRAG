@@ -1,6 +1,8 @@
 # type: ignore
 import os
+import sys
 
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import certifi
 
 os.environ["SSL_CERT_FILE"] = certifi.where()
@@ -29,8 +31,6 @@ from moviepy.editor import VideoFileClip
 from ..videorag import QueryParam, VideoRAG
 from ..videorag.llm import (
     LLMConfig,
-    dashscope_caption_complete,
-    gpt_complete,
     ollama_config,
     openai_embedding,
 )
@@ -44,18 +44,23 @@ logging.getLogger("httpx").setLevel(logging.WARNING)
 def log_to_file(message, log_file="log.txt"):
     """Log messages to file"""
     timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-
-    # Ensure the log file is created in the script's directory
     script_dir = os.path.dirname(os.path.abspath(__file__))
     log_path = os.path.join(script_dir, log_file)
 
     try:
+        # Forza UTF-8
         with open(log_path, "a", encoding="utf-8") as f:
             f.write(f"[{timestamp}] {message}\n")
-        print(f"[LOG] {message}")  # Add prefix to distinguish
+        print(f"[LOG] {message}")
+    except UnicodeEncodeError:
+        # fallback: rimuove caratteri non ASCII
+        safe_message = message.encode("ascii", errors="ignore").decode("ascii")
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write(f"[{timestamp}] {safe_message}\n")
+        print(f"[LOG] {safe_message}")
     except Exception as e:
         print(f"[ERROR] Failed to write to log: {e}")
-        print(f"[LOG] {message}")  # At least output to console
+        print(f"[LOG] {message}")
 
 
 # New: JSON status management tool function
@@ -81,7 +86,7 @@ def read_status_json(file_path: str) -> dict:
         with open(file_path, "r", encoding="utf-8") as f:
             return json.load(f)
     except Exception as e:
-        log_to_file(f"⚠️ Failed to read status file {file_path}: {str(e)}")
+        log_to_file(f"Failed to read status file {file_path}: {str(e)}")
         return {}
 
 
@@ -110,7 +115,7 @@ def update_session_status(
 
     # Write updated status
     write_status_json(status_file, current_status)
-    log_to_file(f"📝 Updated {status_type} status for {chat_id}")
+    log_to_file(f"Updated {status_type} status for {chat_id}")
 
 
 def create_llm_config(global_config):
@@ -118,7 +123,7 @@ def create_llm_config(global_config):
     use_local_models = global_config.get("use_local_models", False)
 
     if use_local_models:
-        log_to_file("🔧 Creating LLM config for LOCAL models")
+        log_to_file("Creating LLM config for LOCAL models")
         # Use a copy of the default ollama_config to avoid modifying the global default
         config = ollama_config
         config.embedding_model_name = global_config.get(
@@ -131,11 +136,11 @@ def create_llm_config(global_config):
         ollama_host = global_config.get("ollama_host")
         if ollama_host:
             os.environ["OLLAMA_HOST"] = ollama_host
-            log_to_file(f"🔧 Set OLLAMA_HOST to: {ollama_host}")
+            log_to_file(f"Set OLLAMA_HOST to: {ollama_host}")
 
         return config
     else:
-        log_to_file("🔧 Creating LLM config for REMOTE models")
+        log_to_file("Creating LLM config for REMOTE models")
         # Existing logic for OpenAI/Dashscope
         return LLMConfig(
             embedding_func_raw=openai_embedding,
@@ -145,15 +150,12 @@ def create_llm_config(global_config):
             embedding_batch_num=32,
             embedding_func_max_async=16,
             query_better_than_threshold=0.2,
-            best_model_func_raw=gpt_complete,
             best_model_name=global_config.get("analysisModel"),
             best_model_max_token_size=32768,
             best_model_max_async=16,
-            cheap_model_func_raw=gpt_complete,
             cheap_model_name=global_config.get("processingModel"),
             cheap_model_max_token_size=32768,
             cheap_model_max_async=16,
-            caption_model_func_raw=dashscope_caption_complete,
             caption_model_name=global_config.get("caption_model"),
             caption_model_max_async=3,
         )
@@ -179,30 +181,28 @@ class GlobalImageBindManager:
             self.model_path = model_path
             self.model_config = {"model_path": model_path, "configured_at": time.time()}
             self.is_initialized = True
-            log_to_file(
-                f"✅ ImageBind manager configured with model path: {model_path}"
-            )
+            log_to_file(f"ImageBind manager configured with model path: {model_path}")
             return True
 
     def ensure_imagebind_loaded(self):
         """Ensure ImageBind model is loaded"""
         with self._lock:
             if self.is_loaded:
-                log_to_file("⚠️ ImageBind already loaded")
+                log_to_file("ImageBind already loaded")
                 return True
 
             if not self.is_initialized or not self.model_path:
                 raise RuntimeError("ImageBind not initialized with model path")
 
             try:
-                log_to_file("🔄 Loading ImageBind model...")
+                log_to_file("Loading ImageBind model...")
 
                 import torch
                 from imagebind.models.imagebind_model import ImageBindModel
                 from videorag._utils import get_imagebind_device
 
                 device = get_imagebind_device()
-                log_to_file(f"📍 Using device for ImageBind: {device}")
+                log_to_file(f"Using device for ImageBind: {device}")
 
                 self.embedder = ImageBindModel(
                     vision_embed_dim=1280,
@@ -232,18 +232,18 @@ class GlobalImageBindManager:
                 )
 
                 self.is_loaded = True
-                log_to_file("✅ ImageBind model loaded successfully")
+                log_to_file("ImageBind model loaded successfully")
                 return True
 
             except Exception as e:
-                log_to_file(f"❌ Failed to load ImageBind: {str(e)}")
+                log_to_file(f"Failed to load ImageBind: {str(e)}")
                 raise
 
     def release_imagebind(self):
         """Release ImageBind model memory"""
         with self._lock:
             if not self.is_loaded:
-                log_to_file("⚠️ ImageBind not loaded, nothing to release")
+                log_to_file("ImageBind not loaded, nothing to release")
                 return True
 
             try:
@@ -259,11 +259,11 @@ class GlobalImageBindManager:
 
                 self.embedder = None
                 self.is_loaded = False
-                log_to_file("🧹 ImageBind model released successfully")
+                log_to_file("ImageBind model released successfully")
                 return True
 
             except Exception as e:
-                log_to_file(f"❌ Failed to release ImageBind: {str(e)}")
+                log_to_file(f"Failed to release ImageBind: {str(e)}")
                 raise
 
     def encode_video_segments(self, video_batch: List[str]) -> np.ndarray:
@@ -277,7 +277,7 @@ class GlobalImageBindManager:
             from videorag._videoutil import encode_video_segments
 
             result = encode_video_segments(video_batch, self.embedder)
-            log_to_file(f"🎬 Encoded {len(video_batch)} video segments")
+            log_to_file(f"Encoded {len(video_batch)} video segments")
             return result
 
     def encode_string_query(self, query: str) -> np.ndarray:
@@ -292,10 +292,10 @@ class GlobalImageBindManager:
                 from videorag._videoutil import encode_string_query
 
                 result = encode_string_query(query, self.embedder)
-                log_to_file(f"🔍 Encoded query: {query[:50]}...")
+                log_to_file(f"Encoded query: {query[:50]}...")
                 return result
             except Exception as e:
-                log_to_file(f"❌ Query encoding failed: {str(e)}")
+                log_to_file(f"Query encoding failed: {str(e)}")
                 raise
 
     def get_status(self) -> dict:
@@ -318,7 +318,7 @@ class GlobalImageBindManager:
             self.is_initialized = False
             self.model_path = None
             self.model_config = None
-            log_to_file("🧹 ImageBind manager cleaned up")
+            log_to_file("ImageBind manager cleaned up")
 
 
 class HTTPImageBindClient:
@@ -354,7 +354,7 @@ class HTTPImageBindClient:
             return embeddings
 
         except Exception as e:
-            log_to_file(f"❌ HTTP client video encoding error: {str(e)}")
+            log_to_file(f"HTTP client video encoding error: {str(e)}")
             raise
 
     def encode_string_query(self, query: str) -> np.ndarray:
@@ -381,7 +381,7 @@ class HTTPImageBindClient:
             return embeddings
 
         except Exception as e:
-            log_to_file(f"❌ HTTP client query encoding error: {str(e)}")
+            log_to_file(f"HTTP client query encoding error: {str(e)}")
             raise
 
     def get_status(self) -> dict:
@@ -401,7 +401,7 @@ class HTTPImageBindClient:
             return result["status"]
 
         except Exception as e:
-            log_to_file(f"❌ HTTP client status check error: {str(e)}")
+            log_to_file(f"HTTP client status check error: {str(e)}")
             raise
 
 
@@ -414,7 +414,7 @@ class VideoRAGProcessManager:
 
     def set_global_config(self, config):
         """Set global configuration"""
-        log_to_file(f"🔄 Global config set: {config}")
+        log_to_file(f"Global config set: {config}")
         self.global_config = config
         return True
 
@@ -459,7 +459,7 @@ class VideoRAGProcessManager:
             return True
 
         except Exception as e:
-            log_to_file(f"❌ Video indexing failed: {str(e)}")
+            log_to_file(f"Video indexing failed: {str(e)}")
             raise
 
     def start_query_processing(self, chat_id, query):
@@ -502,7 +502,7 @@ class VideoRAGProcessManager:
             return True
 
         except Exception as e:
-            log_to_file(f"❌ Query processing failed: {str(e)}")
+            log_to_file(f"Query processing failed: {str(e)}")
             raise
 
     def terminate_process(self, chat_id):
@@ -513,19 +513,19 @@ class VideoRAGProcessManager:
             try:
                 process_info = self.running_processes[chat_id]
                 if process_info["process"].is_alive():
-                    log_to_file(f"🔥 Terminating process: {chat_id}")
+                    log_to_file(f"Terminating process: {chat_id}")
                     process_info["process"].terminate()
                     process_info["process"].join(timeout=5)
 
                     if process_info["process"].is_alive():
-                        log_to_file(f"💀 Force killing process: {chat_id}")
+                        log_to_file(f"Force killing process: {chat_id}")
                         process_info["process"].kill()
                         process_info["process"].join()
 
                 terminated.append(chat_id)
                 del self.running_processes[chat_id]
             except Exception as e:
-                log_to_file(f"⚠️ Process termination failed {chat_id}: {str(e)}")
+                log_to_file(f"Process termination failed {chat_id}: {str(e)}")
 
         # Update status file
         if self.global_config:
@@ -546,14 +546,14 @@ class VideoRAGProcessManager:
     def delete_session(self, chat_id):
         """Delete session and its processes"""
         try:
-            log_to_file(f"🗑️ Deleting session {chat_id}")
+            log_to_file(f"Deleting session {chat_id}")
             terminated = self.terminate_process(chat_id)
             log_to_file(
-                f"🗑️ Deleted session {chat_id}, terminated processes: {terminated}"
+                f"Deleted session {chat_id}, terminated processes: {terminated}"
             )
             return True
         except Exception as e:
-            log_to_file(f"❌ Failed to delete session {chat_id}: {str(e)}")
+            log_to_file(f"Failed to delete session {chat_id}: {str(e)}")
             return False
 
     def get_session_status(self, chat_id, status_type="indexing"):
@@ -572,7 +572,7 @@ class VideoRAGProcessManager:
                 return status_data.get("indexing_status")
 
         except Exception as e:
-            log_to_file(f"❌ Failed to get session status: {str(e)}")
+            log_to_file(f"Failed to get session status: {str(e)}")
             return None
 
     def get_indexed_videos(self, chat_id):
@@ -586,7 +586,7 @@ class VideoRAGProcessManager:
             status_data = read_status_json(status_file)
             return status_data.get("indexed_videos", [])
         except Exception as e:
-            log_to_file(f"❌ Failed to get indexed videos: {str(e)}")
+            log_to_file(f"Failed to get indexed videos: {str(e)}")
             return []
 
     def get_process_status(self):
@@ -603,17 +603,17 @@ class VideoRAGProcessManager:
 
     def cleanup(self):
         """Clean up resources - force terminate all subprocesses"""
-        log_to_file("🧹 Starting process cleanup...")
+        log_to_file("Starting process cleanup...")
 
         # First try to gracefully terminate processes
         for key, process_info in list(self.running_processes.items()):
             try:
                 process = process_info["process"]
                 if process.is_alive():
-                    log_to_file(f"🔥 Terminating process: {key} (PID: {process.pid})")
+                    log_to_file(f"Terminating process: {key} (PID: {process.pid})")
                     process.terminate()
             except Exception as e:
-                log_to_file(f"⚠️ Error terminating process {key}: {str(e)}")
+                log_to_file(f"Error terminating process {key}: {str(e)}")
 
         # Wait for processes to end
         time.sleep(2)
@@ -623,11 +623,11 @@ class VideoRAGProcessManager:
             try:
                 process = process_info["process"]
                 if process.is_alive():
-                    log_to_file(f"💀 Force killing process: {key} (PID: {process.pid})")
+                    log_to_file(f"Force killing process: {key} (PID: {process.pid})")
                     process.kill()
                     process.join(timeout=3)
             except Exception as e:
-                log_to_file(f"⚠️ Error killing process {key}: {str(e)}")
+                log_to_file(f"Error killing process {key}: {str(e)}")
 
         # Extra insurance: find and kill all related processes through psutil
         try:
@@ -644,7 +644,7 @@ class VideoRAGProcessManager:
                             or "videorag-query-" in proc_name
                         ):
                             log_to_file(
-                                f"💀 Force killing orphan process: {proc_info['pid']} - {proc_name}"
+                                f"Force killing orphan process: {proc_info['pid']} - {proc_name}"
                             )
                             proc.kill()
                 except (
@@ -654,10 +654,10 @@ class VideoRAGProcessManager:
                 ):
                     continue
         except Exception as e:
-            log_to_file(f"⚠️ Error during psutil cleanup: {str(e)}")
+            log_to_file(f"Error during psutil cleanup: {str(e)}")
 
         self.running_processes.clear()
-        log_to_file("🧹 Process manager cleanup completed")
+        log_to_file("Process manager cleanup completed")
 
 
 global_imagebind_manager = None
@@ -703,7 +703,7 @@ def index_video_worker_process(chat_id, video_path_list, global_config, server_u
     # Log the process name setting for index worker
     import os
 
-    log_to_file(f"🔧 Index worker process {os.getpid()} set name to: {process_name}")
+    log_to_file(f"Index worker process {os.getpid()} set name to: {process_name}")
 
     try:
         base_storage_path = global_config.get("base_storage_path")
@@ -787,7 +787,7 @@ def index_video_worker_process(chat_id, video_path_list, global_config, server_u
             }
         )
 
-        log_to_file(f"✅ Process-based video indexing completed: {chat_id}")
+        log_to_file(f"Process-based video indexing completed: {chat_id}")
 
     except Exception as e:
         base_storage_path = global_config.get("base_storage_path")
@@ -801,7 +801,7 @@ def index_video_worker_process(chat_id, video_path_list, global_config, server_u
                 "current_step": "Error",
             },
         )
-        log_to_file(f"❌ Process-based video indexing failed: {str(e)}")
+        log_to_file(f"Process-based video indexing failed: {str(e)}")
 
 
 def query_worker_process(chat_id, query, global_config, server_url):
@@ -826,7 +826,7 @@ def query_worker_process(chat_id, query, global_config, server_url):
     # Log the process name setting for query worker
     import os
 
-    log_to_file(f"🔧 Query worker process {os.getpid()} set name to: {process_name}")
+    log_to_file(f"Query worker process {os.getpid()} set name to: {process_name}")
 
     try:
         base_storage_path = global_config.get("base_storage_path")
@@ -837,7 +837,7 @@ def query_worker_process(chat_id, query, global_config, server_url):
                 chat_id, base_storage_path, "query_status", status_data
             )
 
-        log_to_file(f"🔄 Starting query processing for chat {chat_id}: {query}")
+        log_to_file(f"Starting query processing for chat {chat_id}: {query}")
 
         # Step 1: Initializing
         update_query_status(
@@ -905,7 +905,7 @@ def query_worker_process(chat_id, query, global_config, server_url):
             }
         )
 
-        log_to_file(f"✅ Query processing completed for chat {chat_id}")
+        log_to_file(f"Query processing completed for chat {chat_id}")
 
     except Exception as e:
         base_storage_path = global_config.get("base_storage_path")
@@ -920,7 +920,7 @@ def query_worker_process(chat_id, query, global_config, server_url):
                 "query": query,
             },
         )
-        log_to_file(f"❌ Query processing failed: {str(e)}")
+        log_to_file(f"Query processing failed: {str(e)}")
 
 
 # Flask application factory function
@@ -961,10 +961,10 @@ def register_routes(app):
                     "height": size[1],
                     "video_path": video_path,
                 }
-            log_to_file(f"🔍 Video duration: {result}")
+            log_to_file(f"Video duration: {result}")
             return jsonify(result)
         except Exception as e:
-            log_to_file(f"❌ Video duration extraction error: {str(e)}")
+            log_to_file(f"Video duration extraction error: {str(e)}")
             return jsonify(
                 {"success": False, "error": f"Duration extraction error: {str(e)}"}
             ), 500
@@ -990,7 +990,7 @@ def register_routes(app):
             )
 
         except Exception as e:
-            log_to_file(f"❌ Configuration error: {str(e)}")
+            log_to_file(f"Configuration error: {str(e)}")
             return jsonify(
                 {"success": False, "error": f"Configuration error: {str(e)}"}
             ), 500
@@ -1029,7 +1029,7 @@ def register_routes(app):
                     ), 400
 
             # Encode video
-            log_to_file(f"🎬 Encoding {video_batch} video segments")
+            log_to_file(f"Encoding {video_batch} video segments")
             result = get_imagebind_manager().encode_video_segments(video_batch).numpy()
             # Convert numpy array to base64 string for transmission
             result_bytes = pickle.dumps(result)
@@ -1046,7 +1046,7 @@ def register_routes(app):
             )
 
         except Exception as e:
-            log_to_file(f"❌ Video encoding API error: {str(e)}")
+            log_to_file(f"Video encoding API error: {str(e)}")
             return jsonify(
                 {"success": False, "error": f"Video encoding error: {str(e)}"}
             ), 500
@@ -1079,7 +1079,7 @@ def register_routes(app):
             )
 
         except Exception as e:
-            log_to_file(f"❌ Query encoding API error: {str(e)}")
+            log_to_file(f"Query encoding API error: {str(e)}")
             return jsonify(
                 {"success": False, "error": f"Query encoding error: {str(e)}"}
             ), 500
@@ -1087,7 +1087,7 @@ def register_routes(app):
     @app.route("/api/sessions/<chat_id>/videos/upload", methods=["POST"])
     def upload_video(chat_id):
         """Upload video for specific chat session and start indexing - asynchronous operation"""
-        log_to_file(f"📝 API: Starting async video upload for chat_id: {chat_id}")
+        log_to_file(f"API: Starting async video upload for chat_id: {chat_id}")
 
         try:
             data = request.json
@@ -1098,7 +1098,7 @@ def register_routes(app):
                     {"success": False, "error": "video_path_list is required"}
                 ), 400
 
-            log_to_file(f"📹 Videos to process: {len(video_path_list)}")
+            log_to_file(f"Videos to process: {len(video_path_list)}")
 
             for path in video_path_list:
                 if not path or not os.path.exists(path):
@@ -1111,7 +1111,7 @@ def register_routes(app):
                 os.path.basename(path).split(".")[0] for path in video_path_list
             ]
 
-            log_to_file(f"🚀 Starting background video processing for {chat_id}")
+            log_to_file(f"Starting background video processing for {chat_id}")
 
             # Start background indexing process
             get_process_manager().start_video_indexing(chat_id, video_path_list)
@@ -1130,7 +1130,7 @@ def register_routes(app):
 
         except Exception as e:
             error_msg = f"Failed to start video processing: {str(e)}"
-            log_to_file(f"❌ {error_msg}")
+            log_to_file(f"Error: {error_msg}")
             return jsonify({"success": False, "error": error_msg}), 500
 
     @app.route("/api/sessions/<chat_id>/status", methods=["GET"])
@@ -1152,7 +1152,7 @@ def register_routes(app):
                         }
                     ), 404
 
-                log_to_file(f"🔍 Query status: {status_info}")
+                log_to_file(f"Query status: {status_info}")
 
                 return jsonify(
                     {
@@ -1179,7 +1179,7 @@ def register_routes(app):
                         }
                     ), 404
 
-                log_to_file(f"🔍 Session status: {status_info}")
+                log_to_file(f"Session status: {status_info}")
 
                 return jsonify(
                     {
@@ -1192,7 +1192,7 @@ def register_routes(app):
                 )
 
         except Exception as e:
-            log_to_file(f"❌ Session status error: {str(e)}")
+            log_to_file(f"Session status error: {str(e)}")
             return jsonify(
                 {"success": False, "error": f"Status check error: {str(e)}"}
             ), 500
@@ -1255,7 +1255,7 @@ def register_routes(app):
         """Query video content for specific session - start async processing"""
         try:
             data = request.json
-            log_to_file(f"🔍 Query data: {data}")
+            log_to_file(f"Query data: {data}")
             if not data:
                 return jsonify(
                     {"success": False, "error": "No JSON data provided"}
@@ -1264,7 +1264,7 @@ def register_routes(app):
             query = data.get("query", "").strip()
 
             # Start async query processing
-            log_to_file(f"🚀 Starting query processing for chat {chat_id}: {query}")
+            log_to_file(f"Starting query processing for chat {chat_id}: {query}")
             success = get_process_manager().start_query_processing(chat_id, query)
 
             if not success:
@@ -1458,19 +1458,19 @@ def cleanup_on_exit():
     _cleanup_called = True
 
     try:
-        log_to_file("🔔 VideoRAG API server is shutting down...")
+        log_to_file("VideoRAG API server is shutting down...")
         if process_manager:
             process_manager.cleanup()
         if global_imagebind_manager:
             global_imagebind_manager.cleanup()
-        log_to_file("✅ Cleanup completed")
+        log_to_file("Cleanup completed")
     except Exception as e:
-        log_to_file(f"❌ Error during cleanup: {str(e)}")
+        log_to_file(f"Error during cleanup: {str(e)}")
 
 
 def signal_handler(signum, frame):
     """Signal handler"""
-    log_to_file(f"🔔 Received signal {signum}, initiating shutdown...")
+    log_to_file(f"Received signal {signum}, initiating shutdown...")
     cleanup_on_exit()
     exit(0)
 
@@ -1490,13 +1490,13 @@ if __name__ == "__main__":
             import win32api
 
             def win32_handler(dwCtrlType):
-                log_to_file(f"🔔 Windows signal received: {dwCtrlType}")
+                log_to_file(f"Windows signal received: {dwCtrlType}")
                 cleanup_on_exit()
                 return True
 
             win32api.SetConsoleCtrlHandler(win32_handler, True)
         except ImportError:
-            log_to_file("⚠️ win32api not available, using basic signal handling")
+            log_to_file("win32api not available, using basic signal handling")
             pass
 
     # Set process name only in main process
@@ -1536,17 +1536,17 @@ if __name__ == "__main__":
         log_to_file(
             f"🚀 Starting VideoRAG API with global ImageBind on port {SERVER_PORT}"
         )
-        log_to_file(f"📝 Main process PID: {os.getpid()}")
+        log_to_file(f"Main process PID: {os.getpid()}")
 
         # Use factory function to create Flask app
         app = create_app()
         app.run(host="0.0.0.0", port=SERVER_PORT, debug=False, threaded=True)
 
     except KeyboardInterrupt:
-        log_to_file("🔔 Received keyboard interrupt")
+        log_to_file("Received keyboard interrupt")
         cleanup_on_exit()
     except Exception as e:
-        log_to_file(f"❌ Failed to start server: {e}")
+        log_to_file(f"Failed to start server: {e}")
         cleanup_on_exit()
         exit(1)
     finally:

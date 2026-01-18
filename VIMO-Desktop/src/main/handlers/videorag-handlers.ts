@@ -3,6 +3,7 @@ import axios from "axios";
 import { ChildProcess, spawn } from "child_process";
 import path from "path";
 import fs from "fs";
+import { app } from "electron";
 
 let VIDEORAG_API_BASE_URL = "http://localhost:64451/api";
 
@@ -46,6 +47,27 @@ async function scanForVideoRAGService(
   return null;
 }
 
+export function startVideoRAGBackend() {
+  const batPath = path.join(app.getAppPath(), "scripts", "start_api.bat");
+
+  console.log("▶ Starting backend via:", batPath);
+
+  const process = spawn("cmd.exe", ["/c", batPath], {
+    windowsHide: false,
+    stdio: "inherit",
+  });
+
+  process.on("close", (code) => {
+    console.log(`[VideoRAG] Backend exited with code ${code}`);
+  });
+
+  process.on("error", (err) => {
+    console.error("[VideoRAG] Failed to start backend:", err);
+  });
+
+  return process;
+}
+
 // Start Python backend service
 export function startVideoRAGService(): Promise<boolean> {
   return new Promise(async (resolve, reject) => {
@@ -69,41 +91,68 @@ export function startVideoRAGService(): Promise<boolean> {
       };
 
       if (isDev) {
-        // Development mode: start python script directly
         console.log("🚀 Development mode - starting Python backend service");
-        const scriptPath = path.join(
+
+        const backendPath = path.join(
           __dirname,
           "..",
           "..",
           "..",
-          "..",
-          "src",
           "VideoRAG-algorithm",
-          "api",
-          "videorag_api.py",
         );
-        const scriptDir = path.dirname(scriptPath);
 
-        console.log(`✅ Python script path: ${scriptPath}`);
-        pythonProcess = spawn("python", ["-u", scriptPath], {
-          // -u for unbuffered output
-          shell: false, // Use shell to solve PATH issues on Windows
-          stdio: ["pipe", "pipe", "pipe"],
-          cwd: scriptDir,
+        pythonProcess = spawn("python", ["-u", "-m", "src.api.videorag_api"], {
+          cwd: backendPath,
           env: { ...process.env },
+          stdio: ["pipe", "pipe", "pipe"],
         });
 
         pythonProcess.stdout?.on("data", (data) => {
           const output = data.toString();
-          console.log(`VideoRAG API: ${output}`);
+          console.log(`[VideoRAG API]: ${output}`);
         });
 
         pythonProcess.stderr?.on("data", (data) => {
           const errorStr = data.toString();
-          console.error(`VideoRAG API Error: ${errorStr}`);
+          console.error(`[VideoRAG API ERROR]: ${errorStr}`);
         });
 
-        console.log(`✅ Successfully started Python script`);
+        pythonProcess.on("error", (err) => {
+          console.error("[VideoRAG] Failed to start backend:", err);
+          safeReject(err);
+        });
+
+        pythonProcess.on("close", (code) => {
+          console.log(`[VideoRAG] Backend exited with code ${code}`);
+          pythonProcess = null;
+        });
+
+        // **Aspetta che il backend risponda al health check**
+        const waitForBackend = async () => {
+          let attempts = 0;
+          const maxAttempts = 20; // puoi aumentare se serve
+          const interval = 2000;
+
+          while (attempts < maxAttempts) {
+            const found = await scanForVideoRAGService(
+              PORT_RANGE_START,
+              PORT_RANGE_END,
+            );
+            if (found) {
+              updateAPIBaseURL(found);
+              safeResolve(true); // backend pronto
+              return;
+            }
+            attempts++;
+            await new Promise((r) => setTimeout(r, interval));
+          }
+
+          safeReject(
+            new Error("Failed to start Python backend after multiple attempts"),
+          );
+        };
+
+        waitForBackend();
       } else {
         // Production mode: start the packaged executable
         console.log("🚀 Production mode - starting packaged backend service");
