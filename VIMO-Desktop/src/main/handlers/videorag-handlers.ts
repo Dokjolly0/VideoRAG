@@ -398,6 +398,7 @@ async function initializeVideoRAGConfig(): Promise<void> {
       openai_api_key: settings.openaiApiKey,
       image_bind_model_path: imagebindModelPath, // Use dynamically built path
       base_storage_path: settings.storeDirectory,
+      use_local_models: settings.use_local_models,
 
       // Fields with default values
       ali_dashscope_base_url:

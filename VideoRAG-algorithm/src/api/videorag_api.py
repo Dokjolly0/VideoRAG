@@ -69,8 +69,12 @@ def write_status_json(file_path: str, status_data: dict):
     try:
         with open(temp_file, "w", encoding="utf-8") as f:
             json.dump(status_data, f, ensure_ascii=False, indent=2)
+
         # Atomic rename
-        os.rename(temp_file, file_path)
+        # --- FIX: use os.replace ---
+        # os.rename(temp_file, file_path)  <-- Only for macos/linux
+        os.replace(temp_file, file_path)  # (cross-platform)
+
     except Exception as e:
         if os.path.exists(temp_file):
             os.remove(temp_file)
