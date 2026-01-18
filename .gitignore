@@ -1,0 +1,4 @@
+.checkpoints/
+videorag_storage/
+faster-distil-whisper-large-v3/
+MiniCPM-V-2_6-int4/

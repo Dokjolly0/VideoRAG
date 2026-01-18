@@ -9,9 +9,9 @@ from imagebind.models import imagebind_model
 from nano_vectordb import NanoVectorDB
 from tqdm import tqdm
 
-from videorag._utils import logger
-from videorag._videoutil import encode_string_query, encode_video_segments
-from videorag.base import BaseVectorStorage
+from ...videorag._utils import logger
+from ...videorag._videoutil import encode_string_query, encode_video_segments
+from ...videorag.base import BaseVectorStorage
 
 Data = TypedDict("Data", {"__id__": str, "__vector__": np.ndarray})
 

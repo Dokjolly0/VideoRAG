@@ -5,11 +5,11 @@ from dataclasses import dataclass
 from typing import List, Optional, Set, TypedDict, Union, cast
 
 from neo4j import AsyncGraphDatabase
-from utils.typing import LiteralString
 
-from videorag._utils import logger
-from videorag.base import BaseGraphStorage, SingleCommunitySchema
-from videorag.prompt import GRAPH_FIELD_SEP
+from ...utils.typing import LiteralString
+from ...videorag._utils import logger
+from ...videorag.base import BaseGraphStorage, SingleCommunitySchema
+from ...videorag.prompt import GRAPH_FIELD_SEP
 
 neo4j_lock = asyncio.Lock()
 

@@ -10,37 +10,37 @@ from typing import Callable, Dict, List, Type, Union, cast
 
 import tiktoken
 from transformers import AutoModel, AutoTokenizer
-from utils.get_config_path import get_config_path
 
-from videorag._llm import LLMConfig, openai_config
-from videorag._op import (
+from ..utils.get_config_path import get_config_path
+from ..videorag._llm import LLMConfig, openai_config
+from ..videorag._op import (
     chunking_by_video_segments,
     extract_entities,
     get_chunks,
     videorag_query,
     videorag_query_multiple_choice,
 )
-from videorag._storage import (
+from ..videorag._storage import (
     JsonKVStorage,
     NanoVectorDBStorage,
     NanoVectorDBVideoSegmentStorage,
     NetworkXStorage,
 )
-from videorag._utils import (
+from ..videorag._utils import (
     always_get_an_event_loop,
     convert_response_to_json,
     limit_async_func_call,
     logger,
     wrap_embedding_func_with_attrs,
 )
-from videorag._videoutil import (
+from ..videorag._videoutil import (
     merge_segment_information,
     saving_video_segments,
     segment_caption,
     speech_to_text,
     split_video,
 )
-from videorag.base import (
+from ..videorag.base import (
     BaseGraphStorage,
     BaseKVStorage,
     BaseVectorStorage,
@@ -111,12 +111,16 @@ class VideoRAG:
 
     def load_caption_model(self, debug=False):
         # caption model
+        model_path = Path().parent.parent.parent / "models" / "MiniCPM-V-2_6-int4"
+        if not model_path.exists():
+            raise FileNotFoundError(f"Model path not found: {model_path}")
+
         if not debug:
             self.caption_model = AutoModel.from_pretrained(
-                "./MiniCPM-V-2_6-int4", trust_remote_code=True
+                model_path, trust_remote_code=True
             )
             self.caption_tokenizer = AutoTokenizer.from_pretrained(
-                "./MiniCPM-V-2_6-int4", trust_remote_code=True
+                model_path, trust_remote_code=True
             )
             self.caption_model.eval()
         else:
@@ -195,12 +199,12 @@ class VideoRAG:
             self.llm.cheap_model_max_async
         )(partial(self.llm.cheap_model_func, hashing_kv=self.llm_response_cache))
 
-    def insert_video(self, video_path_list=[]):
+    async def insert_video(self, video_path_list=[]):
         loop = always_get_an_event_loop()
         for video_path in video_path_list:
             # Step0: check the existence
             video_name = os.path.basename(video_path).split(".")[0]
-            if video_name in self.video_segments.has(video_name):
+            if await self.video_segments.has(video_name):
                 logger.info(
                     f"Find the video named {os.path.basename(video_path)} in storage and skip it."
                 )

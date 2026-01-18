@@ -1,4 +1,5 @@
 import os
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -27,7 +28,13 @@ def segment_caption(
     error_queue,
 ):
     try:
-        abs_model_path = os.path.abspath("./MiniCPM-V-2_6-int4")
+        model_path = (
+            Path().parent.parent.parent.parent / "models" / "MiniCPM-V-2_6-int4"
+        )
+        if not model_path.exists():
+            raise FileNotFoundError(f"Model path not found: {model_path}")
+
+        abs_model_path = os.path.abspath(model_path)
         model = AutoModel.from_pretrained(abs_model_path, trust_remote_code=True)
         tokenizer = AutoTokenizer.from_pretrained(
             abs_model_path, trust_remote_code=True

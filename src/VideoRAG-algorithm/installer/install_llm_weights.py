@@ -26,7 +26,7 @@ class LLMWeightsInstaller:
         if project_root:
             self.PROJECT_ROOT = Path(project_root).resolve()
         else:
-            self.PROJECT_ROOT = self.INSTALLER_DIR.parent
+            self.PROJECT_ROOT = self.INSTALLER_DIR.parent.parent.parent / "models"
 
         # paths check
         self.check_path_exists(
