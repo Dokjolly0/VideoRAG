@@ -55,18 +55,27 @@ app.on('before-quit', () => {
  */
 function registerModelHandlers(): void {
   // Check model files
-  ipcMain.handle('check-model-files', async (_, storeDirectory: string) => {
+  ipcMain.handle('check-model-files', async (_, { directory: storeDirectory, imagebindPath: userDefinedPath }: { directory: string, imagebindPath: string }) => {
     try {
       const { access } = require('fs/promises');
-
-      const imagebindPath = join(storeDirectory, 'imagebind_huge', 'imagebind_huge.pth');
-
       let imagebind = false;
 
-      try {
-        await access(imagebindPath);
-        imagebind = true;
-      } catch { }
+      // 1. Check user-defined path first
+      if (userDefinedPath) {
+        try {
+          await access(userDefinedPath);
+          imagebind = true;
+        } catch {}
+      }
+
+      // 2. If not found, check the default directory
+      if (!imagebind && storeDirectory) {
+        const defaultImagebindPath = join(storeDirectory, 'imagebind_huge', 'imagebind_huge.pth');
+        try {
+          await access(defaultImagebindPath);
+          imagebind = true;
+        } catch {}
+      }
 
       return { imagebind };
     } catch (error) {
@@ -97,7 +106,7 @@ function registerModelHandlers(): void {
       // Check if file already exists
       try {
         await access(imagebindPath);
-        return { success: true, message: 'ImageBind model already exists' };
+        return { success: true, message: 'ImageBind model already exists', path: imagebindPath };
       } catch {
         // File doesn't exist, proceed with download
       }
@@ -141,7 +150,7 @@ function registerModelHandlers(): void {
 
           file.on('finish', () => {
             file.close();
-            resolve({ success: true, message: 'ImageBind download completed' });
+            resolve({ success: true, message: 'ImageBind download completed', path: imagebindPath });
           });
 
           file.on('error', (err) => {

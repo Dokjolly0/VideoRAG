@@ -75,6 +75,24 @@ export function registerFileHandlers(): void {
     }
   });
 
+  // Select file handler
+  ipcMain.handle('select-file', async () => {
+    try {
+      const result = await dialog.showOpenDialog({
+        properties: ['openFile'],
+      });
+
+      if (!result.canceled && result.filePaths.length > 0) {
+        return { success: true, path: result.filePaths[0] };
+      }
+
+      return { success: false, error: 'No file selected' };
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      return { success: false, error: errorMessage };
+    }
+  });
+
   // Select video files handler
   ipcMain.handle('select-video-files', async () => {
     try {

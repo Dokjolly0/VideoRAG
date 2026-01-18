@@ -18,6 +18,11 @@ export interface VideoRAGAPI {
     path?: string;
     error?: string;
   }>;
+  selectFile: () => Promise<{
+    success: boolean;
+    path?: string;
+    error?: string;
+  }>;
   selectVideoFiles: () => Promise<{
     success: boolean;
     files?: Array<{ name: string; path: string; size: number }>;
@@ -72,12 +77,13 @@ export interface VideoRAGAPI {
     details?: string;
   }>;
   // Model file checking and downloading
-  checkModelFiles: (storeDirectory: string) => Promise<{
+  checkModelFiles: (args: { directory: string, imagebindPath: string }) => Promise<{
     imagebind: boolean;
   }>;
   downloadImageBind: (storeDirectory: string) => Promise<{
     success: boolean;
     error?: string;
+    path?: string;
   }>;
 
   // Event listeners
@@ -133,6 +139,7 @@ const api: VideoRAGAPI = {
   readFile: () => ipcRenderer.invoke('read-file'),
   saveFile: (content: string) => ipcRenderer.invoke('save-file', content),
   selectFolder: () => ipcRenderer.invoke('select-folder'),
+  selectFile: () => ipcRenderer.invoke('select-file'),
   selectVideoFiles: () => ipcRenderer.invoke('select-video-files'),
 
   saveSettings: (settings: any) =>
@@ -152,8 +159,8 @@ const api: VideoRAGAPI = {
   processWithVideoragEnv: (query: string, videoPath?: string) =>
     ipcRenderer.invoke('process-with-videorag-env', query, videoPath),
   // Model file checking and downloading
-  checkModelFiles: (storeDirectory: string) =>
-    ipcRenderer.invoke('check-model-files', storeDirectory),
+  checkModelFiles: (args: { directory: string, imagebindPath: string }) =>
+    ipcRenderer.invoke('check-model-files', args),
   downloadImageBind: (storeDirectory: string) =>
     ipcRenderer.invoke('download-imagebind', storeDirectory),
 

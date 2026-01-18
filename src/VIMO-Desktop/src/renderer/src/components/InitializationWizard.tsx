@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Button } from './ui/button';
+import React, { useState, useEffect } from "react";
+import { Button } from "./ui/button";
 import {
   FolderOpen,
   Download,
@@ -12,47 +12,53 @@ import {
   Brain,
   Star,
   ExternalLink,
-} from 'lucide-react';
-import vimoLogo from '../assets/images/vimi-logo.png';
-import { ToggleSwitch } from './ui/toggle-switch';
+} from "lucide-react";
+import vimoLogo from "../assets/images/vimi-logo.png";
+import { ToggleSwitch } from "./ui/toggle-switch";
 
 interface InitializationWizardProps {
   onComplete: () => void;
 }
 
-const InitializationWizard: React.FC<InitializationWizardProps> = ({ onComplete }) => {
+const InitializationWizard: React.FC<InitializationWizardProps> = ({
+  onComplete,
+}) => {
   // Define steps configuration
   const steps = [
-    { step: 1, icon: FolderOpen, label: 'Directory' },
-    { step: 2, icon: Download, label: 'Models' },
-    { step: 3, icon: Brain, label: 'API Keys' },
-    { step: 4, icon: Star, label: 'Complete' }
+    { step: 1, icon: FolderOpen, label: "Directory" },
+    { step: 2, icon: Download, label: "Models" },
+    { step: 3, icon: Brain, label: "API Keys" },
+    { step: 4, icon: Star, label: "Complete" },
   ];
   const totalSteps = steps.length;
-  
+
   const [currentStep, setCurrentStep] = useState(1);
-  const [storeDirectory, setStoreDirectory] = useState('');
-  const [imagebindStatus, setImagebindStatus] = useState<'pending' | 'downloading' | 'completed' | 'error'>('pending');
+  const [storeDirectory, setStoreDirectory] = useState("");
+  const [imagebindPath, setImagebindPath] = useState(
+    "../../../../../../../.checkpoints/imagebind_huge.pth",
+  );
+  const [imagebindStatus, setImagebindStatus] = useState<
+    "pending" | "downloading" | "completed" | "error"
+  >("pending");
   const [downloadProgress, setDownloadProgress] = useState({ imagebind: 0 });
   const [isInitializing, setIsInitializing] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [useLocalModels, setUseLocalModels] = useState(false);
-  
+
   // API Key configuration status
   const [apiKeySettings, setApiKeySettings] = useState({
-    openaiBaseUrl: 'https://api.openai.com/v1',
-    openaiApiKey: '',
-    processingModel: 'gpt-4o-mini',
-    analysisModel: 'gpt-4o-mini',
-    dashscopeApiKey: '',
-    captionModel: 'qwen-vl-plus-latest',
-    asrModel: 'paraformer-realtime-v2',
-    ollama_host: 'http://127.0.0.1:11434',
-    local_embedding_model: 'nomic-embed-text',
-    local_best_model: 'gemma2:latest',
-    local_cheap_model: 'olmo2',
+    openaiBaseUrl: "https://api.openai.com/v1",
+    openaiApiKey: "",
+    processingModel: "gpt-4o-mini",
+    analysisModel: "gpt-4o-mini",
+    dashscopeApiKey: "",
+    captionModel: "qwen-vl-plus-latest",
+    asrModel: "paraformer-realtime-v2",
+    ollama_host: "http://127.0.0.1:11434",
+    local_embedding_model: "nomic-embed-text",
+    local_best_model: "gemma2:latest",
+    local_cheap_model: "olmo2",
   });
-
 
   // Initialize component - check for existing settings and models
   useEffect(() => {
@@ -60,21 +66,29 @@ const InitializationWizard: React.FC<InitializationWizardProps> = ({ onComplete 
       try {
         // Load existing settings
         const settingsResult = await window.api.loadSettings();
-        
+
         if (settingsResult.success && settingsResult.settings) {
           const { settings } = settingsResult;
           if (settings.storeDirectory) {
             setStoreDirectory(settings.storeDirectory);
-            await checkModelFiles(settings.storeDirectory);
+          }
+          if (settings.imagebindPath) {
+            setImagebindPath(settings.imagebindPath);
+            await checkModelFiles(
+              settings.storeDirectory,
+              settings.imagebindPath,
+            );
+          } else {
+            await checkModelFiles(settings.storeDirectory, imagebindPath);
           }
           // Load api key settings
-          setApiKeySettings(prev => ({ ...prev, ...settings }));
+          setApiKeySettings((prev) => ({ ...prev, ...settings }));
           if (settings.use_local_models) {
             setUseLocalModels(true);
           }
         }
       } catch (error) {
-        console.error('Failed to initialize component:', error);
+        console.error("Failed to initialize component:", error);
       } finally {
         setIsInitializing(false);
       }
@@ -85,16 +99,24 @@ const InitializationWizard: React.FC<InitializationWizardProps> = ({ onComplete 
 
   // Listen for download progress events
   useEffect(() => {
-    const handleDownloadProgress = (_, data: { type: string, progress: number, downloaded?: number, total?: number }) => {
-      console.log('Download progress:', data);
-      if (data.type === 'imagebind') {
-        setDownloadProgress(prev => ({ ...prev, imagebind: data.progress }));
+    const handleDownloadProgress = (
+      _,
+      data: {
+        type: string;
+        progress: number;
+        downloaded?: number;
+        total?: number;
+      },
+    ) => {
+      console.log("Download progress:", data);
+      if (data.type === "imagebind") {
+        setDownloadProgress((prev) => ({ ...prev, imagebind: data.progress }));
       }
     };
 
     // Add event listeners
     window.api.onDownloadProgress(handleDownloadProgress);
-    
+
     // Cleanup function
     return () => {
       window.api.removeDownloadListeners();
@@ -102,24 +124,31 @@ const InitializationWizard: React.FC<InitializationWizardProps> = ({ onComplete 
   }, []);
 
   // Check if model files exist
-  const checkModelFiles = async (directory?: string) => {
+  const checkModelFiles = async (
+    directory?: string,
+    imagebindPath?: string,
+  ) => {
     const targetDirectory = directory || storeDirectory;
-    if (!targetDirectory) return { imagebind: false };
+    const modelPath = imagebindPath || "";
+    if (!targetDirectory && !modelPath) return { imagebind: false };
 
     try {
-      const result = await window.api.checkModelFiles(targetDirectory);
-      console.log('Model check result:', result);
-      
-      setImagebindStatus(result.imagebind ? 'completed' : 'pending');
-      
+      const result = await window.api.checkModelFiles({
+        directory: targetDirectory,
+        imagebindPath: modelPath,
+      });
+      console.log("Model check result:", result);
+
+      setImagebindStatus(result.imagebind ? "completed" : "pending");
+
       // Update progress to 100% for completed models
       if (result.imagebind) {
-        setDownloadProgress(prev => ({ ...prev, imagebind: 100 }));
+        setDownloadProgress((prev) => ({ ...prev, imagebind: 100 }));
       }
-      
+
       return result;
     } catch (error) {
-      console.error('Failed to check model files:', error);
+      console.error("Failed to check model files:", error);
       return { imagebind: false };
     }
   };
@@ -131,43 +160,63 @@ const InitializationWizard: React.FC<InitializationWizardProps> = ({ onComplete 
       if (result.success && result.path) {
         setStoreDirectory(result.path);
         // Check if model files already exist in this directory
-        setTimeout(() => checkModelFiles(result.path), 500);
+        setTimeout(() => checkModelFiles(result.path, imagebindPath), 500);
       }
     } catch (error) {
-      console.error('Failed to select directory:', error);
+      console.error("Failed to select directory:", error);
+    }
+  };
+
+  const selectImagebindPath = async () => {
+    try {
+      // Assuming window.api.selectFile opens a file dialog and returns a path
+      const result = await window.api.selectFile();
+      if (result.success && result.path) {
+        setImagebindPath(result.path);
+        await checkModelFiles(storeDirectory, result.path);
+      }
+    } catch (error) {
+      console.error("Failed to select ImageBind path:", error);
     }
   };
 
   // Download ImageBind model
   const downloadImageBind = async () => {
     if (!storeDirectory) return;
-    
-    setImagebindStatus('downloading');
-    setDownloadProgress(prev => ({ ...prev, imagebind: 0 }));
-    
+
+    setImagebindStatus("downloading");
+    setDownloadProgress((prev) => ({ ...prev, imagebind: 0 }));
+
     try {
-      console.log('Starting ImageBind download...');
+      console.log("Starting ImageBind download...");
       const result = await window.api.downloadImageBind(storeDirectory);
-      
+
       if (result.success) {
-        setImagebindStatus('completed');
-        setDownloadProgress(prev => ({ ...prev, imagebind: 100 }));
-        console.log('ImageBind download completed successfully');
+        setImagebindStatus("completed");
+        setDownloadProgress((prev) => ({ ...prev, imagebind: 100 }));
+        console.log("ImageBind download completed successfully");
+        // After download, the file is in storeDirectory, so we update the path
+        if (result.path) {
+          setImagebindPath(result.path);
+        }
       } else {
-        setImagebindStatus('error');
+        setImagebindStatus("error");
         alert(`ImageBind download failed: ${result.error}`);
       }
     } catch (error) {
-      setImagebindStatus('error');
-      console.error('ImageBind download failed:', error);
+      setImagebindStatus("error");
+      console.error("ImageBind download failed:", error);
       alert(`ImageBind download error: ${error}`);
     }
   };
 
   // Check if can proceed to next step
-  const canProceedToStep2 = storeDirectory !== '';
-  const canProceedToStep3 = imagebindStatus === 'completed';
-  const canProceedToStep4 = canProceedToStep3 && (useLocalModels || (apiKeySettings.openaiApiKey && apiKeySettings.dashscopeApiKey));
+  const canProceedToStep2 = storeDirectory !== "";
+  const canProceedToStep3 = imagebindStatus === "completed";
+  const canProceedToStep4 =
+    canProceedToStep3 &&
+    (useLocalModels ||
+      (apiKeySettings.openaiApiKey && apiKeySettings.dashscopeApiKey));
 
   // Handle step transitions with animation
   const goToStep = (step: number) => {
@@ -176,24 +225,24 @@ const InitializationWizard: React.FC<InitializationWizardProps> = ({ onComplete 
 
   // Refresh model status
   const refreshModelsStatus = async () => {
-    if (!storeDirectory || isRefreshing) return;
-    
+    if (isRefreshing) return;
+
     setIsRefreshing(true);
-    
+
     try {
-      const result = await window.api.checkModelFiles(storeDirectory);
-      console.log('Refresh check result:', result);
-      
-      setImagebindStatus(result.imagebind ? 'completed' : 'pending');
-      
+      const result = await checkModelFiles(storeDirectory, imagebindPath);
+      console.log("Refresh check result:", result);
+
+      setImagebindStatus(result.imagebind ? "completed" : "pending");
+
       // Update progress for completed models
       if (result.imagebind) {
-        setDownloadProgress(prev => ({ ...prev, imagebind: 100 }));
+        setDownloadProgress((prev) => ({ ...prev, imagebind: 100 }));
       } else {
-        setDownloadProgress(prev => ({ ...prev, imagebind: 0 }));
+        setDownloadProgress((prev) => ({ ...prev, imagebind: 0 }));
       }
     } catch (error) {
-      console.error('Failed to refresh model status:', error);
+      console.error("Failed to refresh model status:", error);
     } finally {
       setIsRefreshing(false);
     }
@@ -201,33 +250,32 @@ const InitializationWizard: React.FC<InitializationWizardProps> = ({ onComplete 
 
   // Handle API key changes
   const handleApiKeyChange = (field: string, value: string) => {
-    setApiKeySettings(prev => ({
+    setApiKeySettings((prev) => ({
       ...prev,
-      [field]: value
+      [field]: value,
     }));
   };
-
-
 
   // Complete initialization
   const completeInitialization = async () => {
     // Save configuration including API keys
     const settings = {
       storeDirectory,
+      imagebindPath,
       imagebindInstalled: true,
       use_local_models: useLocalModels,
       ...apiKeySettings, // Include API key settings
-      initializedAt: new Date().toISOString()
+      initializedAt: new Date().toISOString(),
     };
-    
+
     await window.api.saveSettings(settings);
-    
+
     // Trigger configuration update event, notify sidebar to reload sessions
-    const event = new CustomEvent('storage-config-updated', {
-      detail: { storeDirectory }
+    const event = new CustomEvent("storage-config-updated", {
+      detail: { storeDirectory },
     });
     window.dispatchEvent(event);
-    
+
     onComplete();
   };
 
@@ -248,7 +296,9 @@ const InitializationWizard: React.FC<InitializationWizardProps> = ({ onComplete 
   const renderStep1 = () => (
     <div className="space-y-6">
       <div className="text-center">
-        <h2 className="text-2xl font-bold text-gray-900 mb-3">Select Storage Location</h2>
+        <h2 className="text-2xl font-bold text-gray-900 mb-3">
+          Select Storage Location
+        </h2>
         <p className="text-gray-600 max-w-2xl mx-auto">
           Choose a safe location to store your AI models and data files
         </p>
@@ -260,8 +310,12 @@ const InitializationWizard: React.FC<InitializationWizardProps> = ({ onComplete 
             <FolderOpen className="w-5 h-5 text-white" />
           </div>
           <div>
-            <h3 className="text-lg font-semibold text-gray-900">Data Storage Directory</h3>
-            <p className="text-sm text-gray-600">AI models and Vimo cache data will be stored at this location</p>
+            <h3 className="text-lg font-semibold text-gray-900">
+              Data Storage Directory
+            </h3>
+            <p className="text-sm text-gray-600">
+              AI models and Vimo cache data will be stored at this location
+            </p>
           </div>
         </div>
 
@@ -274,21 +328,20 @@ const InitializationWizard: React.FC<InitializationWizardProps> = ({ onComplete 
               readOnly
               className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:border-purple-400 transition-colors"
             />
-            <Button 
-              onClick={selectDirectory} 
+            <Button
+              onClick={selectDirectory}
               className="px-4 py-2 bg-gradient-to-r from-blue-500 to-purple-500 hover:from-blue-600 hover:to-purple-600 text-white rounded-lg font-medium transition-all"
             >
               <FolderOpen className="w-4 h-4 mr-2" />
               Select
             </Button>
           </div>
-
         </div>
       </div>
 
       <div className="flex justify-end">
-        <Button 
-          onClick={() => goToStep(2)} 
+        <Button
+          onClick={() => goToStep(2)}
           disabled={!canProceedToStep2}
           className="px-6 py-2 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white rounded-lg font-medium transition-all disabled:opacity-50"
         >
@@ -312,15 +365,16 @@ const InitializationWizard: React.FC<InitializationWizardProps> = ({ onComplete 
             className="px-3 py-1 border-gray-300 hover:border-purple-400 hover:bg-purple-50 transition-all disabled:opacity-50"
             title="Refresh model status"
           >
-            <RefreshCw className={`w-4 h-4 mr-2 ${isRefreshing ? 'animate-spin' : ''}`} />
-            {isRefreshing ? 'Checking...' : 'Refresh Status'}
+            <RefreshCw
+              className={`w-4 h-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`}
+            />
+            {isRefreshing ? "Checking..." : "Refresh Status"}
           </Button>
         </div>
         <p className="text-gray-600">
-          {canProceedToStep3 
-            ? "All AI models are already available and ready to use!" 
-            : "Preparing powerful AI models for you, this may take a few minutes"
-          }
+          {canProceedToStep3
+            ? "All AI models are already available and ready to use!"
+            : "Preparing powerful AI models for you, this may take a few minutes"}
         </p>
       </div>
 
@@ -333,24 +387,41 @@ const InitializationWizard: React.FC<InitializationWizardProps> = ({ onComplete 
             </div>
             <div>
               <h3 className="text-lg font-bold text-blue-900">ImageBind</h3>
-              <p className="text-sm text-blue-700">Image & Video Understanding</p>
+              <p className="text-sm text-blue-700">
+                Image & Video Understanding
+              </p>
             </div>
           </div>
-          
+
           <div className="space-y-3">
+            <div>
+              <label className="text-sm font-medium text-gray-700 block mb-2">
+                ImageBind Model Path
+              </label>
+              <div className="flex gap-3">
+                <input
+                  type="text"
+                  placeholder="Path to imagebind_huge.pth"
+                  value={imagebindPath}
+                  onChange={(e) => setImagebindPath(e.target.value)}
+                  className="flex-1 px-3 py-2 text-sm border border-gray-300 rounded-lg bg-white focus:outline-none focus:border-purple-400 transition-colors"
+                />
+                <Button onClick={selectImagebindPath}>Browse</Button>
+              </div>
+            </div>
             <div className="flex justify-between items-center p-2 bg-white/60 rounded-lg text-sm">
               <span>File Size</span>
               <span className="font-semibold text-blue-700">~4.5GB</span>
             </div>
-            
-            {imagebindStatus === 'downloading' && (
+
+            {imagebindStatus === "downloading" && (
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
                   <span>Progress</span>
                   <span>{Math.round(downloadProgress.imagebind)}%</span>
                 </div>
                 <div className="w-full bg-blue-200 rounded-full h-2">
-                  <div 
+                  <div
                     className="bg-gradient-to-r from-blue-500 to-indigo-500 h-2 rounded-full transition-all duration-300"
                     style={{ width: `${downloadProgress.imagebind}%` }}
                   />
@@ -360,37 +431,47 @@ const InitializationWizard: React.FC<InitializationWizardProps> = ({ onComplete 
 
             <Button
               onClick={downloadImageBind}
-              disabled={imagebindStatus === 'downloading' || imagebindStatus === 'completed'}
+              disabled={
+                imagebindStatus === "downloading" ||
+                imagebindStatus === "completed"
+              }
               className={`w-full py-2 font-medium rounded-lg transition-all ${
-                imagebindStatus === 'completed' 
-                  ? 'bg-green-500 hover:bg-green-600 text-white' 
-                  : 'bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white'
+                imagebindStatus === "completed"
+                  ? "bg-green-500 hover:bg-green-600 text-white"
+                  : "bg-gradient-to-r from-blue-500 to-indigo-500 hover:from-blue-600 hover:to-indigo-600 text-white"
               }`}
             >
-              {imagebindStatus === 'downloading' && <RefreshCw className="w-4 h-4 mr-2 animate-spin" />}
-              {imagebindStatus === 'completed' && <CheckCircle className="w-4 h-4 mr-2" />}
-              {imagebindStatus === 'pending' && <Download className="w-4 h-4 mr-2" />}
-              
-              {imagebindStatus === 'completed' ? 'Completed' : 
-               imagebindStatus === 'downloading' ? 'Downloading...' : 'Start Download'}
+              {imagebindStatus === "downloading" && (
+                <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+              )}
+              {imagebindStatus === "completed" && (
+                <CheckCircle className="w-4 h-4 mr-2" />
+              )}
+              {imagebindStatus === "pending" && (
+                <Download className="w-4 h-4 mr-2" />
+              )}
+
+              {imagebindStatus === "completed"
+                ? "Completed"
+                : imagebindStatus === "downloading"
+                  ? "Downloading..."
+                  : "Start Download"}
             </Button>
           </div>
         </div>
-
-
       </div>
 
       <div className="flex justify-between items-center">
-        <Button 
-          onClick={() => goToStep(1)} 
+        <Button
+          onClick={() => goToStep(1)}
           className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-all"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back
         </Button>
-        
-        <Button 
-          onClick={() => goToStep(3)} 
+
+        <Button
+          onClick={() => goToStep(3)}
           disabled={!canProceedToStep3}
           className="px-6 py-2 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white rounded-lg font-medium transition-all disabled:opacity-50"
         >
@@ -404,7 +485,9 @@ const InitializationWizard: React.FC<InitializationWizardProps> = ({ onComplete 
   const renderApiKeySetup = () => (
     <div className="space-y-6">
       <div className="text-center">
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">API Key Configuration</h2>
+        <h2 className="text-2xl font-bold text-gray-900 mb-2">
+          API Key Configuration
+        </h2>
         <p className="text-gray-600">
           Configure your API keys for enhanced video analysis capabilities
         </p>
@@ -415,7 +498,7 @@ const InitializationWizard: React.FC<InitializationWizardProps> = ({ onComplete 
 
       {/* Local Models Toggle */}
       <div className="p-4 rounded-lg bg-gray-50">
-        <ToggleSwitch 
+        <ToggleSwitch
           label="Use Local Models (Ollama)"
           checked={useLocalModels}
           onChange={setUseLocalModels}
@@ -430,46 +513,64 @@ const InitializationWizard: React.FC<InitializationWizardProps> = ({ onComplete 
               <Settings className="w-6 h-6 text-white" />
             </div>
             <div>
-              <h3 className="text-lg font-bold text-green-900">Local Model Configuration</h3>
+              <h3 className="text-lg font-bold text-green-900">
+                Local Model Configuration
+              </h3>
               <p className="text-sm text-green-700">Powered by Ollama</p>
             </div>
           </div>
           <div className="space-y-4">
             <div>
-              <label className="text-sm font-medium text-gray-700 block mb-2">Ollama Host</label>
+              <label className="text-sm font-medium text-gray-700 block mb-2">
+                Ollama Host
+              </label>
               <input
                 type="text"
                 value={apiKeySettings.ollama_host}
-                onChange={(e) => handleApiKeyChange('ollama_host', e.target.value)}
+                onChange={(e) =>
+                  handleApiKeyChange("ollama_host", e.target.value)
+                }
                 placeholder="http://127.0.0.1:11434"
                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
               />
             </div>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div>
-                <label className="text-sm font-medium text-gray-700 block mb-2">Embedding Model</label>
+                <label className="text-sm font-medium text-gray-700 block mb-2">
+                  Embedding Model
+                </label>
                 <input
                   type="text"
                   value={apiKeySettings.local_embedding_model}
-                  onChange={(e) => handleApiKeyChange('local_embedding_model', e.target.value)}
+                  onChange={(e) =>
+                    handleApiKeyChange("local_embedding_model", e.target.value)
+                  }
                   className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 block mb-2">Best Model</label>
+                <label className="text-sm font-medium text-gray-700 block mb-2">
+                  Best Model
+                </label>
                 <input
                   type="text"
                   value={apiKeySettings.local_best_model}
-                  onChange={(e) => handleApiKeyChange('local_best_model', e.target.value)}
+                  onChange={(e) =>
+                    handleApiKeyChange("local_best_model", e.target.value)
+                  }
                   className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 block mb-2">Cheap Model</label>
+                <label className="text-sm font-medium text-gray-700 block mb-2">
+                  Cheap Model
+                </label>
                 <input
                   type="text"
                   value={apiKeySettings.local_cheap_model}
-                  onChange={(e) => handleApiKeyChange('local_cheap_model', e.target.value)}
+                  onChange={(e) =>
+                    handleApiKeyChange("local_cheap_model", e.target.value)
+                  }
                   className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-green-500"
                 />
               </div>
@@ -486,55 +587,79 @@ const InitializationWizard: React.FC<InitializationWizardProps> = ({ onComplete 
                 <Brain className="w-6 h-6 text-white" />
               </div>
               <div>
-                <h3 className="text-lg font-bold text-blue-900">OpenAI Configuration</h3>
-                <p className="text-sm text-blue-700">Language model services for intelligent analysis</p>
+                <h3 className="text-lg font-bold text-blue-900">
+                  OpenAI Configuration
+                </h3>
+                <p className="text-sm text-blue-700">
+                  Language model services for intelligent analysis
+                </p>
               </div>
             </div>
             <div className="space-y-4">
               <div>
-                <label className="text-sm font-medium text-gray-700 block mb-2">Base URL</label>
+                <label className="text-sm font-medium text-gray-700 block mb-2">
+                  Base URL
+                </label>
                 <input
                   type="text"
                   placeholder="https://api.openai.com/v1"
                   value={apiKeySettings.openaiBaseUrl}
-                  onChange={(e) => handleApiKeyChange('openaiBaseUrl', e.target.value)}
+                  onChange={(e) =>
+                    handleApiKeyChange("openaiBaseUrl", e.target.value)
+                  }
                   className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
-                <label className="text-sm font-medium text-gray-700 block mb-2">API Key *</label>
+                <label className="text-sm font-medium text-gray-700 block mb-2">
+                  API Key *
+                </label>
                 <input
                   type="password"
                   placeholder="sk-..."
                   value={apiKeySettings.openaiApiKey}
-                  onChange={(e) => handleApiKeyChange('openaiApiKey', e.target.value)}
+                  onChange={(e) =>
+                    handleApiKeyChange("openaiApiKey", e.target.value)
+                  }
                   className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="text-sm font-medium text-gray-700 block mb-2">Processing Model</label>
+                  <label className="text-sm font-medium text-gray-700 block mb-2">
+                    Processing Model
+                  </label>
                   <select
                     value={apiKeySettings.processingModel}
-                    onChange={(e) => handleApiKeyChange('processingModel', e.target.value)}
+                    onChange={(e) =>
+                      handleApiKeyChange("processingModel", e.target.value)
+                    }
                     className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                   >
                     <option value="gpt-4o-mini">gpt-4o-mini</option>
                     <option value="gpt-4o">gpt-4o</option>
                   </select>
-                  <p className="text-xs text-gray-500 mt-1">For high-volume preprocessing.</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    For high-volume preprocessing.
+                  </p>
                 </div>
                 <div>
-                  <label className="text-sm font-medium text-gray-700 block mb-2">Analysis Model</label>
+                  <label className="text-sm font-medium text-gray-700 block mb-2">
+                    Analysis Model
+                  </label>
                   <select
                     value={apiKeySettings.analysisModel}
-                    onChange={(e) => handleApiKeyChange('analysisModel', e.target.value)}
+                    onChange={(e) =>
+                      handleApiKeyChange("analysisModel", e.target.value)
+                    }
                     className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 bg-white"
                   >
                     <option value="gpt-4o-mini">gpt-4o-mini</option>
                     <option value="gpt-4o">gpt-4o</option>
                   </select>
-                  <p className="text-xs text-gray-500 mt-1">For detailed analysis tasks.</p>
+                  <p className="text-xs text-gray-500 mt-1">
+                    For detailed analysis tasks.
+                  </p>
                 </div>
               </div>
             </div>
@@ -548,8 +673,12 @@ const InitializationWizard: React.FC<InitializationWizardProps> = ({ onComplete 
                   <Settings className="w-6 h-6 text-white" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-bold text-orange-900">DashScope Configuration</h3>
-                  <p className="text-sm text-orange-700">For video captioning</p>
+                  <h3 className="text-lg font-bold text-orange-900">
+                    DashScope Configuration
+                  </h3>
+                  <p className="text-sm text-orange-700">
+                    For video captioning
+                  </p>
                 </div>
               </div>
               <a
@@ -563,12 +692,16 @@ const InitializationWizard: React.FC<InitializationWizardProps> = ({ onComplete 
               </a>
             </div>
             <div>
-              <label className="text-sm font-medium text-gray-700 block mb-2">DashScope API Key *</label>
+              <label className="text-sm font-medium text-gray-700 block mb-2">
+                DashScope API Key *
+              </label>
               <input
                 type="password"
                 placeholder="sk-..."
                 value={apiKeySettings.dashscopeApiKey}
-                onChange={(e) => handleApiKeyChange('dashscopeApiKey', e.target.value)}
+                onChange={(e) =>
+                  handleApiKeyChange("dashscopeApiKey", e.target.value)
+                }
                 className="w-full px-3 py-2 text-sm border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500"
               />
             </div>
@@ -577,16 +710,16 @@ const InitializationWizard: React.FC<InitializationWizardProps> = ({ onComplete 
       )}
 
       <div className="flex justify-between items-center">
-        <Button 
-          onClick={() => goToStep(2)} 
+        <Button
+          onClick={() => goToStep(2)}
           className="px-4 py-2 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-lg font-medium transition-all"
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
           Back
         </Button>
-        
-        <Button 
-          onClick={() => goToStep(4)} 
+
+        <Button
+          onClick={() => goToStep(4)}
           disabled={!canProceedToStep4}
           className="px-6 py-2 bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white rounded-lg font-medium transition-all disabled:opacity-50"
         >
@@ -602,11 +735,14 @@ const InitializationWizard: React.FC<InitializationWizardProps> = ({ onComplete 
       <div className="mx-auto w-20 h-20 bg-gradient-to-r from-purple-500 to-pink-500 rounded-full flex items-center justify-center mb-4">
         <Sparkles className="w-10 h-10 text-white" />
       </div>
-      
+
       <div>
-        <h2 className="text-3xl font-bold text-gray-900 mb-3">🎉 Setup Complete!</h2>
+        <h2 className="text-3xl font-bold text-gray-900 mb-3">
+          🎉 Setup Complete!
+        </h2>
         <p className="text-lg text-gray-600 mb-4">
-          Vimo is ready! You can now start using intelligent video analysis features
+          Vimo is ready! You can now start using intelligent video analysis
+          features
         </p>
       </div>
 
@@ -633,7 +769,7 @@ const InitializationWizard: React.FC<InitializationWizardProps> = ({ onComplete 
         </div>
       </div>
 
-      <Button 
+      <Button
         onClick={completeInitialization}
         className="px-8 py-3 text-lg font-bold bg-gradient-to-r from-purple-500 to-blue-500 hover:from-purple-600 hover:to-blue-600 text-white rounded-lg shadow-lg transition-all"
       >
@@ -646,22 +782,33 @@ const InitializationWizard: React.FC<InitializationWizardProps> = ({ onComplete 
   return (
     <div className="fixed inset-0 bg-gradient-to-br from-blue-50 via-white to-purple-50 z-50 overflow-auto">
       {/* Draggable area */}
-      <div className="fixed top-0 left-0 right-0 h-8 bg-transparent z-50" style={{ WebkitAppRegion: 'drag' } as any}></div>
-      
+      <div
+        className="fixed top-0 left-0 right-0 h-8 bg-transparent z-50"
+        style={{ WebkitAppRegion: "drag" } as any}
+      ></div>
+
       <div className="min-h-full flex items-center justify-center p-4 pt-12">
         <div className="w-full max-w-3xl mx-auto">
           {/* Welcome header */}
           <div className="text-center mb-6">
             <div className="mb-4">
               <div className="flex items-center justify-center gap-3 mb-4">
-                <img src={vimoLogo} alt="Vimo" className="w-16 h-16 rounded-2xl shadow-lg" />
+                <img
+                  src={vimoLogo}
+                  alt="Vimo"
+                  className="w-16 h-16 rounded-2xl shadow-lg"
+                />
                 <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-500 via-purple-600 to-pink-500 bg-clip-text text-transparent">
                   Vimo
                 </h1>
               </div>
             </div>
-            <p className="text-gray-600 mb-1 text-lg">Agentic Video Understanding</p>
-            <p className="text-sm text-gray-500">Let's set up your AI environment</p>
+            <p className="text-gray-600 mb-1 text-lg">
+              Agentic Video Understanding
+            </p>
+            <p className="text-sm text-gray-500">
+              Let's set up your AI environment
+            </p>
           </div>
 
           {/* Modern Progress indicator */}
@@ -670,26 +817,34 @@ const InitializationWizard: React.FC<InitializationWizardProps> = ({ onComplete 
               {/* Progress bar background */}
               <div className="relative pt-4 pb-12">
                 <div className="h-2 bg-gray-200 rounded-full">
-                  <div 
+                  <div
                     className="h-2 bg-gradient-to-r from-purple-500 to-blue-500 rounded-full transition-all duration-700 ease-out"
-                    style={{ width: `${((currentStep - 1) / (totalSteps - 1)) * 100}%` }}
+                    style={{
+                      width: `${((currentStep - 1) / (totalSteps - 1)) * 100}%`,
+                    }}
                   />
                 </div>
-                
+
                 {/* Step indicators */}
                 <div className="absolute top-1 left-0 right-0 flex justify-between items-center">
                   {steps.map(({ step, icon: Icon, label }) => (
-                    <div key={step} className="flex flex-col items-center relative">
+                    <div
+                      key={step}
+                      className="flex flex-col items-center relative"
+                    >
                       {/* Step circle */}
-                      <div className={`
+                      <div
+                        className={`
                         w-8 h-8 rounded-full flex items-center justify-center border-4 border-white shadow-lg transition-all duration-300
-                        ${step < currentStep 
-                          ? 'bg-gradient-to-r from-purple-500 to-blue-500 text-white' 
-                          : step === currentStep
-                            ? 'bg-purple-500 text-white animate-pulse'
-                            : 'bg-gray-300 text-gray-500'
+                        ${
+                          step < currentStep
+                            ? "bg-gradient-to-r from-purple-500 to-blue-500 text-white"
+                            : step === currentStep
+                              ? "bg-purple-500 text-white animate-pulse"
+                              : "bg-gray-300 text-gray-500"
                         }
-                      `}>
+                      `}
+                      >
                         {step < currentStep ? (
                           <CheckCircle className="w-4 h-4" />
                         ) : step === currentStep ? (
@@ -698,13 +853,17 @@ const InitializationWizard: React.FC<InitializationWizardProps> = ({ onComplete 
                           <div className="w-2 h-2 bg-gray-400 rounded-full" />
                         )}
                       </div>
-                      
+
                       {/* Step label */}
-                      <span className={`mt-4 text-sm font-medium transition-colors duration-300 ${
-                        step < currentStep ? 'text-purple-600' 
-                        : step === currentStep ? 'text-purple-600' 
-                        : 'text-gray-500'
-                      }`}>
+                      <span
+                        className={`mt-4 text-sm font-medium transition-colors duration-300 ${
+                          step < currentStep
+                            ? "text-purple-600"
+                            : step === currentStep
+                              ? "text-purple-600"
+                              : "text-gray-500"
+                        }`}
+                      >
                         {label}
                       </span>
                     </div>
@@ -727,4 +886,4 @@ const InitializationWizard: React.FC<InitializationWizardProps> = ({ onComplete 
   );
 };
 
-export default InitializationWizard; 
+export default InitializationWizard;
