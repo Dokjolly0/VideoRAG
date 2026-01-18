@@ -1,11 +1,12 @@
 import argparse
+import asyncio
 import json
 import logging
 import multiprocessing
 import os
 import warnings
 
-from videorag._llm import LLMConfig, gpt_4o_mini_complete, openai_embedding
+from videorag.llm import LLMConfig, gpt_4o_mini_complete, openai_embedding
 from videorag.videorag import QueryParam, VideoRAG
 
 warnings.filterwarnings("ignore")
@@ -41,7 +42,8 @@ longervideos_llm_config = LLMConfig(
     cheap_model_max_async=16,
 )
 
-if __name__ == "__main__":
+
+async def main():
     multiprocessing.set_start_method("spawn")
 
     ## learn
@@ -52,8 +54,8 @@ if __name__ == "__main__":
         llm=longervideos_llm_config,
         working_dir=f"./longervideos/videorag-workdir/{sub_category}",
     )
-    videorag.insert_video(video_path_list=video_paths)
-
+    # videorag.insert_video(video_path_list=video_paths)
+    await videorag.insert_video(video_path_list=video_paths)
     ## inference
     with open("./longervideos/dataset.json", "r") as f:
         longervideos = json.load(f)
@@ -80,3 +82,7 @@ if __name__ == "__main__":
         print(response)
         with open(os.path.join(answer_folder, f"answer_{query_id}.md"), "w") as f:
             f.write(response)
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

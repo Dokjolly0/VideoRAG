@@ -8,8 +8,8 @@ import hnswlib
 import numpy as np
 import xxhash
 
-from ...videorag.base import BaseVectorStorage
-from ...videorag.utils import logger
+from ..videorag.base import BaseVectorStorage
+from ..videorag.utils import logger
 
 
 @dataclass

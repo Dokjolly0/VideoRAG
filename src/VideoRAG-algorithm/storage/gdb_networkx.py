@@ -9,12 +9,12 @@ import networkx as nx
 import numpy as np
 from graspologic.utils import largest_connected_component
 
-from ...videorag.base import (
+from ..videorag.base import (
     BaseGraphStorage,
     SingleCommunitySchema,
 )
-from ...videorag.prompt import GRAPH_FIELD_SEP
-from ...videorag.utils import logger
+from ..videorag.prompt import GRAPH_FIELD_SEP
+from ..videorag.utils import logger
 
 
 @dataclass

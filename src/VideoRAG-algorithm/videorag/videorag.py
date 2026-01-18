@@ -11,13 +11,13 @@ from typing import Any, Awaitable, Callable, Dict, List, Type, Union, cast
 import tiktoken
 from transformers import AutoModel, AutoTokenizer
 
-from ..utils.get_config_path import get_config_path
-from ..videorag._storage import (
+from ..storage import (
     JsonKVStorage,
     NanoVectorDBStorage,
     NanoVectorDBVideoSegmentStorage,
     NetworkXStorage,
 )
+from ..utils.get_config_path import get_config_path
 from ..videorag.base import (
     BaseGraphStorage,
     BaseKVStorage,
