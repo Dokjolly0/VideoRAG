@@ -60,6 +60,29 @@ const InitializationWizard: React.FC<InitializationWizardProps> = ({
     local_cheap_model: "olmo2",
   });
 
+  const DUMMY_KEY = "sk-dummy-key-for-local-mode";
+  // Effetto per gestire le chiavi dummy quando si switcha a Local Models
+  useEffect(() => {
+    if (useLocalModels) {
+      setApiKeySettings((prev) => ({
+        ...prev,
+        // Imposta la chiave dummy se il campo è vuoto o se era già dummy
+        openaiApiKey: prev.openaiApiKey ? prev.openaiApiKey : DUMMY_KEY,
+        dashscopeApiKey: prev.dashscopeApiKey
+          ? prev.dashscopeApiKey
+          : DUMMY_KEY,
+      }));
+    } else {
+      // Se disattivi local models e c'erano le chiavi dummy, puliscile
+      setApiKeySettings((prev) => ({
+        ...prev,
+        openaiApiKey: prev.openaiApiKey === DUMMY_KEY ? "" : prev.openaiApiKey,
+        dashscopeApiKey:
+          prev.dashscopeApiKey === DUMMY_KEY ? "" : prev.dashscopeApiKey,
+      }));
+    }
+  }, [useLocalModels]);
+
   // Initialize component - check for existing settings and models
   useEffect(() => {
     const initializeComponent = async () => {
