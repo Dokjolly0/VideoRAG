@@ -16,7 +16,7 @@ async def main():
 
     # Ollama setup
     custom_llm = ollama_config
-    custom_llm.model_name = "llama3:8b"
+    # custom_llm.best_model_name = "llama3:8b" -> Use gemma2 default
     custom_llm.embedding_model_name = "nomic-embed-text"
     os.environ["OPENAI_API_BASE"] = "http://localhost:11434/v1"
     os.environ["OPENAI_API_KEY"] = "ollama"  # Dummy value for Ollama
