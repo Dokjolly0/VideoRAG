@@ -2,7 +2,6 @@
 import os
 import sys
 
-sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import certifi
 
 os.environ["SSL_CERT_FILE"] = certifi.where()
@@ -195,11 +194,12 @@ class GlobalImageBindManager:
                 raise RuntimeError("ImageBind not initialized with model path")
 
             try:
-                log_to_file("Loading ImageBind model...")
+                log_to_file("ensure_imagebind_loaded: Loading ImageBind model...")
 
                 import torch
                 from imagebind.models.imagebind_model import ImageBindModel
-                from videorag._utils import get_imagebind_device
+
+                from ..videorag.utils import get_imagebind_device
 
                 device = get_imagebind_device()
                 log_to_file(f"Using device for ImageBind: {device}")
@@ -226,7 +226,6 @@ class GlobalImageBindManager:
                 )
                 self.embedder = self.embedder.to(device)
                 self.embedder.eval()
-
                 self.model_config.update(
                     {"device": str(device), "loaded_at": time.time()}
                 )
@@ -1354,7 +1353,9 @@ def register_routes(app):
         """Load ImageBind model"""
         try:
             im = get_imagebind_manager()
+            print(f"IM -> {im.model_path}")
             success = im.ensure_imagebind_loaded()
+            print(f"IM -> Success: {im.ensure_imagebind_loaded()}")
 
             if success:
                 return jsonify(

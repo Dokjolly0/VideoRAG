@@ -12,6 +12,7 @@ from typing import Any, Awaitable, Callable, Union
 
 import numpy as np
 import tiktoken
+import torch
 
 logger = logging.getLogger("nano-graphrag")
 ENCODER = None
@@ -208,3 +209,19 @@ def wrap_embedding_func_with_attrs(**kwargs):
         return new_func
 
     return final_decro
+
+
+def get_imagebind_device():
+    """
+    Determina il dispositivo migliore disponibile (CUDA o CPU) per ImageBind.
+    """
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+        logging.info(f"ImageBind using CUDA device: {torch.cuda.get_device_name(0)}")
+    else:
+        device = torch.device("cpu")
+        logging.warning(
+            "CUDA not available. ImageBind will run on CPU (this will be slow)."
+        )
+
+    return device
