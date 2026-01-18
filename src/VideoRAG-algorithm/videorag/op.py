@@ -6,8 +6,16 @@ from typing import Any, Awaitable, Callable, Optional, Tuple, TypeAlias, Union
 
 import tiktoken
 
-from ..videorag._splitter import SeparatorSplitter
-from ..videorag._utils import (
+from ..videorag.base import (
+    BaseGraphStorage,
+    BaseKVStorage,
+    BaseVectorStorage,
+    QueryParam,
+    TextChunkSchema,
+)
+from ..videorag.prompt import GRAPH_FIELD_SEP, PROMPTS
+from ..videorag.splitter import SeparatorSplitter
+from ..videorag.utils import (
     clean_str,
     compute_mdhash_id,
     decode_tokens_by_tiktoken,
@@ -19,18 +27,9 @@ from ..videorag._utils import (
     split_string_by_multi_markers,
     truncate_list_by_token_size,
 )
-from ..videorag._videoutil import (
-    retrieved_segment_caption,
-)
-from ..videorag.base import (
-    BaseGraphStorage,
-    BaseKVStorage,
-    BaseVectorStorage,
-    QueryParam,
-    TextChunkSchema,
-)
-from ..videorag.prompt import GRAPH_FIELD_SEP, PROMPTS
+from ..videorag.video_utils import VideoUtils
 
+video_utils = VideoUtils()
 ExtractEntitiesResult: TypeAlias = Optional[
     tuple[
         BaseGraphStorage,
@@ -740,7 +739,7 @@ async def videorag_query(
         global_config,
     )
     print(f"Keywords: {keywords_for_caption}")
-    caption_results = retrieved_segment_caption(
+    caption_results = video_utils.retrieved_segment_caption(
         caption_model,
         caption_tokenizer,
         keywords_for_caption,
@@ -944,7 +943,7 @@ async def videorag_query_multiple_choice(
         global_config,
     )
     print(f"Keywords: {keywords_for_caption}")
-    caption_results = retrieved_segment_caption(
+    caption_results = video_utils.retrieved_segment_caption(
         caption_model,
         caption_tokenizer,
         keywords_for_caption,

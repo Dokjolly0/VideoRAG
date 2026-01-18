@@ -3,7 +3,7 @@ from typing import Generic, Literal, TypedDict, TypeVar, Union
 
 import numpy as np
 
-from ..videorag._utils import EmbeddingFunc
+from ..videorag.utils import EmbeddingFunc
 
 
 @dataclass

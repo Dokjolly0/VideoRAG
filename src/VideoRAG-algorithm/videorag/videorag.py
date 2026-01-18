@@ -6,39 +6,17 @@ from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from functools import partial
 from pathlib import Path
-from typing import Callable, Dict, List, Type, Union, cast
+from typing import Any, Awaitable, Callable, Dict, List, Type, Union, cast
 
 import tiktoken
 from transformers import AutoModel, AutoTokenizer
 
 from ..utils.get_config_path import get_config_path
-from ..videorag._llm import LLMConfig, openai_config
-from ..videorag._op import (
-    chunking_by_video_segments,
-    extract_entities,
-    get_chunks,
-    videorag_query,
-    videorag_query_multiple_choice,
-)
 from ..videorag._storage import (
     JsonKVStorage,
     NanoVectorDBStorage,
     NanoVectorDBVideoSegmentStorage,
     NetworkXStorage,
-)
-from ..videorag._utils import (
-    always_get_an_event_loop,
-    convert_response_to_json,
-    limit_async_func_call,
-    logger,
-    wrap_embedding_func_with_attrs,
-)
-from ..videorag._videoutil import (
-    merge_segment_information,
-    saving_video_segments,
-    segment_caption,
-    speech_to_text,
-    split_video,
 )
 from ..videorag.base import (
     BaseGraphStorage,
@@ -47,10 +25,28 @@ from ..videorag.base import (
     QueryParam,
     StorageNameSpace,
 )
+from ..videorag.llm import LLMConfig, openai_config
+from ..videorag.op import (
+    chunking_by_video_segments,
+    extract_entities,
+    get_chunks,
+    videorag_query,
+    videorag_query_multiple_choice,
+)
+from ..videorag.utils import (
+    EmbeddingFunc,
+    always_get_an_event_loop,
+    convert_response_to_json,
+    limit_async_func_call,
+    logger,
+    wrap_embedding_func_with_attrs,
+)
+from .video_utils import VideoUtils
 
 
 @dataclass
 class VideoRAG:
+    video_utils = VideoUtils()
     working_dir: str = field(
         default_factory=lambda: f"./videorag_cache_{datetime.now().strftime('%Y-%m-%d-%H:%M:%S')}"
     )
@@ -94,7 +90,7 @@ class VideoRAG:
     llm: LLMConfig = openai_config  # before field(default_factory=openai_config)
 
     # entity extraction
-    entity_extraction_func: callable = extract_entities
+    entity_extraction_func: Callable[..., Awaitable[Any]] = extract_entities
 
     # storage
     key_string_value_json_storage_cls: Type[BaseKVStorage] = JsonKVStorage
@@ -107,7 +103,7 @@ class VideoRAG:
     # extension
     always_create_working_dir: bool = True
     addon_params: dict = field(default_factory=dict)
-    convert_response_to_json_func: callable = convert_response_to_json
+    convert_response_to_json_func: Callable[..., object] = convert_response_to_json
 
     def load_caption_model(self, debug=False):
         # caption model
@@ -159,13 +155,14 @@ class VideoRAG:
             namespace="chunk_entity_relation", global_config=asdict(self)
         )
 
-        self.embedding_func = limit_async_func_call(self.llm.embedding_func_max_async)(
+        wrapped_func = limit_async_func_call(self.llm.embedding_func_max_async)(
             wrap_embedding_func_with_attrs(
                 embedding_dim=self.llm.embedding_dim,
                 max_token_size=self.llm.embedding_max_token_size,
                 model_name=self.llm.embedding_model_name,
             )(self.llm.embedding_func)
         )
+        self.embedding_func = cast(EmbeddingFunc, wrapped_func)
         self.entities_vdb = (
             self.vector_db_storage_cls(
                 namespace="entities",
@@ -189,15 +186,18 @@ class VideoRAG:
         self.video_segment_feature_vdb = self.vs_vector_db_storage_cls(
             namespace="video_segment_feature",
             global_config=asdict(self),
-            embedding_func=None,  # we code the embedding process inside the insert() function.
+            embedding_func=cast(Any, None),  # Equals to None, dummy cast
         )
 
-        self.llm.best_model_func = limit_async_func_call(self.llm.best_model_max_async)(
-            partial(self.llm.best_model_func, hashing_kv=self.llm_response_cache)
-        )
-        self.llm.cheap_model_func = limit_async_func_call(
-            self.llm.cheap_model_max_async
-        )(partial(self.llm.cheap_model_func, hashing_kv=self.llm_response_cache))
+        if self.llm.best_model_func:
+            self.llm.best_model_func = limit_async_func_call(
+                self.llm.best_model_max_async
+            )(partial(self.llm.best_model_func, hashing_kv=self.llm_response_cache))
+
+        if self.llm.cheap_model_func:
+            self.llm.cheap_model_func = limit_async_func_call(
+                self.llm.cheap_model_max_async
+            )(partial(self.llm.cheap_model_func, hashing_kv=self.llm_response_cache))
 
     async def insert_video(self, video_path_list=[]):
         loop = always_get_an_event_loop()
@@ -212,7 +212,7 @@ class VideoRAG:
             loop.run_until_complete(self.video_path_db.upsert({video_name: video_path}))
 
             # Step1: split the videos
-            segment_index2name, segment_times_info = split_video(
+            segment_index2name, segment_times_info = self.video_utils.split_video(
                 video_path,
                 self.working_dir,
                 self.video_segment_length,
@@ -221,7 +221,7 @@ class VideoRAG:
             )
 
             # Step2: obtain transcript with whisper
-            transcripts = speech_to_text(
+            transcripts = self.video_utils.speech_to_text(
                 video_name,
                 self.working_dir,
                 segment_index2name,
@@ -234,7 +234,7 @@ class VideoRAG:
             error_queue = manager.Queue()
 
             process_saving_video_segments = multiprocessing.Process(
-                target=saving_video_segments,
+                target=self.video_utils.saving_video_segments,
                 args=(
                     video_name,
                     video_path,
@@ -247,7 +247,7 @@ class VideoRAG:
             )
 
             process_segment_caption = multiprocessing.Process(
-                target=segment_caption,
+                target=self.video_utils.segment_caption,
                 args=(
                     video_name,
                     video_path,
@@ -280,7 +280,7 @@ class VideoRAG:
                 raise RuntimeError(error_message)
 
             # Step4: insert video segments information
-            segments_information = merge_segment_information(
+            segments_information = self.video_utils.merge_segment_information(
                 segment_index2name,
                 segment_times_info,
                 transcripts,
@@ -310,7 +310,9 @@ class VideoRAG:
             # Step 7: saving current video information
             loop.run_until_complete(self._save_video_segments())
 
-        loop.run_until_complete(self.ainsert(self.video_segments._data))
+        loop.run_until_complete(
+            self.ainsert(cast(JsonKVStorage, self.video_segments)._data)
+        )
 
     def query(self, query: str, param: QueryParam) -> str:
         try:
@@ -394,9 +396,11 @@ class VideoRAG:
                 entity_vdb=self.entities_vdb,
                 global_config=asdict(self),
             )
+
             if maybe_new_kg is None:
                 logger.warning("No new entities found")
                 return
+
             self.chunk_entity_relation_graph = maybe_new_kg
             # ---------- commit upsertings and indexing
             await self.text_chunks.upsert(inserting_chunks)

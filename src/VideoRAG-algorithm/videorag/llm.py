@@ -12,12 +12,12 @@ from tenacity import (
     wait_exponential,
 )
 
-from ..videorag._utils import (
+from ..videorag.base import BaseKVStorage
+from ..videorag.utils import (
     EmbeddingFunc,
     compute_args_hash,
     wrap_embedding_func_with_attrs,
 )
-from ..videorag.base import BaseKVStorage
 
 global_openai_async_client = None
 global_azure_openai_async_client = None

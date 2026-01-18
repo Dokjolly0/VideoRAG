@@ -4,7 +4,7 @@ from pathlib import Path
 
 import nest_asyncio
 
-from ..videorag._llm import ollama_config
+from ..videorag.llm import ollama_config
 from ..videorag.videorag import QueryParam, VideoRAG
 
 nest_asyncio.apply()

@@ -9,11 +9,12 @@ from imagebind.models import imagebind_model
 from nano_vectordb import NanoVectorDB
 from tqdm import tqdm
 
-from ...videorag._utils import logger
-from ...videorag._videoutil import encode_string_query, encode_video_segments
 from ...videorag.base import BaseVectorStorage
+from ...videorag.utils import logger
+from ...videorag.video_utils import VideoUtils
 
 Data = TypedDict("Data", {"__id__": str, "__vector__": np.ndarray})
+video_utils = VideoUtils()
 
 
 @dataclass
@@ -124,7 +125,7 @@ class NanoVectorDBVideoSegmentStorage(BaseVectorStorage):
         ]
         embeddings = []
         for _batch in tqdm(batches, desc=f"Encoding Video Segments {video_name}"):
-            batch_embeddings = encode_video_segments(_batch, embedder)
+            batch_embeddings = video_utils.encode_video_segments(_batch, embedder)
             embeddings.append(batch_embeddings)
         embeddings = torch.concat(embeddings, dim=0)
         embeddings = embeddings.numpy()
@@ -137,7 +138,7 @@ class NanoVectorDBVideoSegmentStorage(BaseVectorStorage):
         embedder = imagebind_model.imagebind_huge(pretrained=True).cuda()
         embedder.eval()
 
-        embedding = encode_string_query(query, embedder)
+        embedding = video_utils.encode_string_query(query, embedder)
         embedding = embedding[0]
         results = self._client.query(
             query=embedding,
