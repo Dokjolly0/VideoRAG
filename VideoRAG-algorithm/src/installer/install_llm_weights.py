@@ -39,7 +39,10 @@ class LLMWeightsInstaller:
         """
         for p in paths:
             if not p.exists():
-                raise FileNotFoundError(f"Path not found: {p}")
+                try:
+                    p.mkdir(parents=True)
+                except PermissionError:
+                    raise PermissionError(f"Permission denied to create directory: {p}")
 
     def install_package(
         self, package_name: str, import_name: str, pip_install_cmd=None
