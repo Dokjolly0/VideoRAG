@@ -14,10 +14,14 @@ from PIL import Image
 from tqdm import tqdm
 from transformers import AutoModel, AutoTokenizer
 
+from ..utils.file_locator import FileLocator
 from .utils import logger
 
 
 class VideoUtils:
+    def __init__(self):
+        self.fl = FileLocator()
+
     def split_video(
         self,
         video_path,
@@ -160,9 +164,7 @@ class VideoUtils:
         error_queue,
     ):
         try:
-            model_path = (
-                Path().parent.parent.parent.parent / "models" / "MiniCPM-V-2_6-int4"
-            )
+            model_path = self.fl.MiniCPM
             if not model_path.exists():
                 raise FileNotFoundError(f"Model path not found: {model_path}")
 
@@ -262,11 +264,7 @@ class VideoUtils:
     def speech_to_text(
         self, video_name, working_dir, segment_index2name, audio_output_format
     ):
-        model_path = (
-            Path().parent.parent.parent.parent
-            / "models"
-            / "faster-distil-whisper-large-v3"
-        )
+        model_path = self.fl.FasterDistil
         if not model_path.exists():
             raise FileNotFoundError(f"Model path not found: {model_path}")
 

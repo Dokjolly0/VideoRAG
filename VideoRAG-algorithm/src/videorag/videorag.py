@@ -17,6 +17,7 @@ from ..storage import (
     NanoVectorDBVideoSegmentStorage,
     NetworkXStorage,
 )
+from ..utils.file_locator import FileLocator
 from ..utils.get_config_path import get_config_path
 from ..videorag.base import (
     BaseGraphStorage,
@@ -46,6 +47,7 @@ from .video_utils import VideoUtils
 
 @dataclass
 class VideoRAG:
+    fl = FileLocator()
     video_utils = VideoUtils()
     working_dir: str = field(
         default_factory=lambda: f"./videorag_cache_{datetime.now().strftime('%Y-%m-%d-%H:%M:%S')}"
@@ -107,7 +109,7 @@ class VideoRAG:
 
     def load_caption_model(self, debug=False):
         # caption model
-        model_path = Path().parent.parent.parent / "models" / "MiniCPM-V-2_6-int4"
+        model_path = self.fl.MiniCPM
         if not model_path.exists():
             raise FileNotFoundError(f"Model path not found: {model_path}")
 

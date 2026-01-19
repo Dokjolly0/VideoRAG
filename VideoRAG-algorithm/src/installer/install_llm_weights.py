@@ -5,6 +5,8 @@ from pathlib import Path
 
 from huggingface_hub import snapshot_download
 
+from ..utils.file_locator import FileLocator
+
 
 class LLMWeightsInstaller:
     def __init__(
@@ -13,6 +15,8 @@ class LLMWeightsInstaller:
         installer_dir: str | Path | None = None,
         project_root: str | Path | None = None,
     ):
+        self.fl = FileLocator()
+
         if current_script_path:
             self.CURRENT_SCRIPT = Path(current_script_path).resolve()
         else:
@@ -74,24 +78,23 @@ class LLMWeightsInstaller:
         except subprocess.CalledProcessError as e:
             print(f"❌ Error installing {package_name}: {e}")
 
-    def download_if_missing(self, repo_id: str, folder_name: str):
+    def download_if_missing(self, repo_id: str, folder_path: Path):
         """
         Downloads model weights if config.json is missing in the target folder.
         """
-        dest_path = self.PROJECT_ROOT / folder_name
-        check_file = dest_path / "config.json"
+        check_file = folder_path / "config.json"
 
         print(f"\n🔍 Checking model weights: {repo_id}")
-        print(f"   Destination: {dest_path}")
+        print(f"   Destination: {folder_path}")
 
-        if dest_path.exists() and check_file.exists():
+        if folder_path.exists() and check_file.exists():
             print("✅ Found existing weights. Skipping download.")
         else:
             print("⬇️  Weights not found. Downloading...")
             try:
                 snapshot_download(
                     repo_id=repo_id,
-                    local_dir=dest_path,
+                    local_dir=folder_path,
                     local_dir_use_symlinks=False,
                 )
                 print("✅ Download completed.")
@@ -117,16 +120,15 @@ if __name__ == "__main__":
     )
 
     # --- PHASE 2: DOWNLOAD MODEL WEIGHTS ---
-
-    # 3. Download Model Weights (Audio)
+    # Download Model Weights (Audio)
     installer.download_if_missing(
         repo_id="Systran/faster-distil-whisper-large-v3",
-        folder_name="faster-distil-whisper-large-v3",
+        folder_path=installer.fl.FasterDistil,
     )
 
-    # 4. Download Model Weights (Vision)
+    # Download Model Weights (Vision)
     installer.download_if_missing(
-        repo_id="openbmb/MiniCPM-V-2_6-int4", folder_name="MiniCPM-V-2_6-int4"
+        repo_id="openbmb/MiniCPM-V-2_6-int4", folder_path=installer.fl.MiniCPM
     )
 
     print("\n🎉 All installations and downloads completed.")
