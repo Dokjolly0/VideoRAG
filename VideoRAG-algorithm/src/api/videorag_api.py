@@ -1,9 +1,10 @@
 # type: ignore
+import asyncio
+import io
 import os
 import sys
 
 import certifi
-from huggingface_hub.utils.tqdm import progress_bar_states
 
 os.environ["SSL_CERT_FILE"] = certifi.where()
 os.environ["REQUESTS_CA_BUNDLE"] = certifi.where()
@@ -35,6 +36,11 @@ from ..videorag.llm import (
     openai_embedding,
 )
 from ..videorag.utils import logger
+
+# Prevent the error 'charmap' codec can't encode character '\\u2819' in position 0
+if os.name == "nt":
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", errors="replace")
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding="utf-8", errors="replace")
 
 warnings.filterwarnings("ignore")
 logging.getLogger("httpx").setLevel(logging.WARNING)
@@ -773,7 +779,9 @@ def index_video_worker_process(chat_id, video_path_list, global_config, server_u
                 add_indexed_video(indexed_video_path)
 
         # Call insert_video
-        videorag_instance.insert_video(video_path_list=video_path_list)
+        asyncio.run(
+            videorag_instance.insert_video_for_api(video_path_list=video_path_list)
+        )
 
         update_status(
             {

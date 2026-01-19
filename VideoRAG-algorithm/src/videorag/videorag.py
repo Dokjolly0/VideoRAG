@@ -312,6 +312,111 @@ class VideoRAG:
             self.ainsert(cast(JsonKVStorage, self.video_segments)._data)
         )
 
+    async def insert_video_for_api(self, video_path_list=None):
+        if video_path_list is None:
+            video_path_list = []
+
+        for video_path in video_path_list:
+            video_name = os.path.basename(video_path).split(".")[0]
+
+            # Step0: check the existence
+            if await self.video_segments.has(video_name):
+                logger.info(
+                    f"Find the video named {os.path.basename(video_path)} in storage and skip it."
+                )
+                continue
+
+            await self.video_path_db.upsert({video_name: video_path})
+
+            # Step1: split the videos (sync)
+            segment_index2name, segment_times_info = self.video_utils.split_video(
+                video_path,
+                self.working_dir,
+                self.video_segment_length,
+                self.rough_num_frames_per_segment,
+                self.audio_output_format,
+            )
+
+            # Step2: obtain transcript with whisper (sync)
+            transcripts = self.video_utils.speech_to_text(
+                video_name,
+                self.working_dir,
+                segment_index2name,
+                self.audio_output_format,
+            )
+
+            # Step3: multiprocessing per salvataggio/caption (sync)
+            manager = multiprocessing.Manager()
+            captions = manager.dict()
+            error_queue = manager.Queue()
+
+            process_saving_video_segments = multiprocessing.Process(
+                target=self.video_utils.saving_video_segments,
+                args=(
+                    video_name,
+                    video_path,
+                    self.working_dir,
+                    segment_index2name,
+                    segment_times_info,
+                    error_queue,
+                    self.video_output_format,
+                ),
+            )
+
+            process_segment_caption = multiprocessing.Process(
+                target=self.video_utils.segment_caption,
+                args=(
+                    video_name,
+                    video_path,
+                    segment_index2name,
+                    transcripts,
+                    segment_times_info,
+                    captions,
+                    error_queue,
+                ),
+            )
+
+            process_saving_video_segments.start()
+            process_segment_caption.start()
+            process_saving_video_segments.join()
+            process_segment_caption.join()
+
+            while not error_queue.empty():
+                config_path = Path(__file__).resolve().parents[2] / "config.json"
+                log_path = get_config_path("error_log_videorag", config_path)
+                if log_path is None:
+                    log_path = config_path.parent / "logs/error_log_videorag.log"
+                log_path.parent.mkdir(parents=True, exist_ok=True)
+
+                error_message = error_queue.get()
+                with open(log_path, "a", encoding="utf-8") as log_file:
+                    log_file.write(
+                        f"Video Name:{video_name} Error processing:\n{error_message}\n\n"
+                    )
+                raise RuntimeError(error_message)
+
+            segments_information = self.video_utils.merge_segment_information(
+                segment_index2name,
+                segment_times_info,
+                transcripts,
+                captions,
+            )
+            manager.shutdown()
+
+            await self.video_segments.upsert({video_name: segments_information})
+
+            # Step6: delete the cache file
+            video_segment_cache_path = os.path.join(
+                self.working_dir, "_cache", video_name
+            )
+            if os.path.exists(video_segment_cache_path):
+                shutil.rmtree(video_segment_cache_path)
+
+            # Step 7: saving current video information
+            await self._save_video_segments()
+
+        await self.ainsert(cast(JsonKVStorage, self.video_segments)._data)
+
     def query(self, query: str, param: QueryParam) -> str:
         try:
             _ = asyncio.get_running_loop()
