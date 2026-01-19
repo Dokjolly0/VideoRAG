@@ -12,9 +12,9 @@ from imagebind.models.imagebind_model import ImageBindModel, ModalityType
 from moviepy.video.io.VideoFileClip import VideoFileClip
 from PIL import Image
 from tqdm import tqdm
-from transformers import AutoModel, AutoTokenizer
 
 from ..utils.file_locator import FileLocator
+from .llm import load_model_with_fast_fallback, load_tokenizer_with_fast_fallback
 from .utils import logger
 
 
@@ -169,10 +169,8 @@ class VideoUtils:
                 raise FileNotFoundError(f"Model path not found: {model_path}")
 
             abs_model_path = os.path.abspath(model_path)
-            model = AutoModel.from_pretrained(abs_model_path, trust_remote_code=True)
-            tokenizer = AutoTokenizer.from_pretrained(
-                abs_model_path, trust_remote_code=True
-            )
+            model = load_model_with_fast_fallback(abs_model_path)
+            tokenizer = load_tokenizer_with_fast_fallback(abs_model_path)
             model.eval()
 
             with VideoFileClip(video_path) as video:
@@ -226,7 +224,7 @@ class VideoUtils:
         num_sampled_frames,
     ):
         # model = AutoModel.from_pretrained('./MiniCPM-V-2_6-int4', trust_remote_code=True)
-        # tokenizer = AutoTokenizer.from_pretrained('./MiniCPM-V-2_6-int4', trust_remote_code=True)
+        # tokenizer = AutoTokenizer.from_pretrained('./MiniCPM-V-2_6-int4', trust_remote_code=True, use_fast=True)
         # model.eval()
 
         caption_result = {}

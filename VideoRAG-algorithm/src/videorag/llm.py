@@ -11,6 +11,7 @@ from tenacity import (
     stop_after_attempt,
     wait_exponential,
 )
+from transformers import AutoModel, AutoTokenizer
 
 from ..videorag.base import BaseKVStorage
 from ..videorag.utils import (
@@ -516,3 +517,23 @@ deepseek_bge_config = LLMConfig(
     cheap_model_max_token_size=32768,
     cheap_model_max_async=16,
 )
+
+
+def load_model_with_fast_fallback(model_path):
+    model = AutoModel.from_pretrained(
+        model_path,
+        trust_remote_code=True,
+    )
+    return model
+
+
+def load_tokenizer_with_fast_fallback(model_path):
+    try:
+        tok = AutoTokenizer.from_pretrained(
+            model_path, trust_remote_code=True, use_fast=True
+        )
+    except Exception:
+        tok = AutoTokenizer.from_pretrained(
+            model_path, trust_remote_code=True, use_fast=False
+        )
+    return tok

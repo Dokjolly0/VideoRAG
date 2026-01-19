@@ -9,7 +9,6 @@ from pathlib import Path
 from typing import Any, Awaitable, Callable, Dict, List, Type, Union, cast
 
 import tiktoken
-from transformers import AutoModel, AutoTokenizer
 
 from ..storage import (
     JsonKVStorage,
@@ -26,7 +25,12 @@ from ..videorag.base import (
     QueryParam,
     StorageNameSpace,
 )
-from ..videorag.llm import LLMConfig, openai_config
+from ..videorag.llm import (
+    LLMConfig,
+    load_model_with_fast_fallback,
+    load_tokenizer_with_fast_fallback,
+    openai_config,
+)
 from ..videorag.op import (
     chunking_by_video_segments,
     extract_entities,
@@ -114,12 +118,8 @@ class VideoRAG:
             raise FileNotFoundError(f"Model path not found: {model_path}")
 
         if not debug:
-            self.caption_model = AutoModel.from_pretrained(
-                model_path, trust_remote_code=True
-            )
-            self.caption_tokenizer = AutoTokenizer.from_pretrained(
-                model_path, trust_remote_code=True
-            )
+            self.caption_model = load_model_with_fast_fallback(model_path)
+            self.caption_tokenizer = load_tokenizer_with_fast_fallback(model_path)
             self.caption_model.eval()
         else:
             self.caption_model = None
