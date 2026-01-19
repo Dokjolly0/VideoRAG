@@ -24,3 +24,4 @@ bitsandbytes
 decord
 graspologic
 typing-extensions
+huggingface_hub

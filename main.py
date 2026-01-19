@@ -1,3 +1,4 @@
+import os
 import argparse
 import subprocess
 
@@ -19,21 +20,28 @@ def main():
     )
 
     args = parser.parse_args()
+    algo_path = os.path.join(os.getcwd(), "VideoRAG-algorithm")
 
-    # Logica di controllo
     if args.cmd and args.desktop:
         raise ValueError("Only one of 'cmd' or 'desktop' can be specified.")
 
     if args.install_llm_weights:
+        # Eseguiamo il comando partendo dall'interno di VideoRAG-algorithm
         subprocess.run(
-            ["python", "-m", "src.VideoRAG-algorithm.installer.install_llm_weights"]
+            ["python", "-m", "src.installer.install_llm_weights"],
+            cwd=algo_path
         )
     elif args.cmd:
-        subprocess.run(["python", "-m", "src.VideoRAG-algorithm.scripts.run_local"])
+        # Eseguiamo il comando partendo dall'interno di VideoRAG-algorithm
+        subprocess.run(
+            ["python", "-m", "src.scripts.run_local"],
+            cwd=algo_path
+        )
     elif args.desktop:
         print("Start desktop app...")
+        # Qui probabilmente dovrai avviare Electron dalla cartella VIMO-Desktop
     else:
-        raise ValueError("Either '--cmd' or '--desktop' must be specified.")
+        print("Please specify --cmd, --desktop, or --install-llm-weights")
 
 
 if __name__ == "__main__":
