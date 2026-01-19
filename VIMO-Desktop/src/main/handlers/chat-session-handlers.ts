@@ -214,6 +214,8 @@ export function registerChatSessionHandlers(): void {
             session = JSON.parse(content);
           } catch (err) {
             console.error("Invalid json parsing:", err);
+            console.log("File:", file);
+            console.log("\n\n\n\n\n\nContent: ", content, "\n\n\n\n\n");
           }
 
           if (session !== null) {

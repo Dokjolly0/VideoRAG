@@ -3,6 +3,7 @@ import os
 import sys
 
 import certifi
+from huggingface_hub.utils.tqdm import progress_bar_states
 
 os.environ["SSL_CERT_FILE"] = certifi.where()
 os.environ["REQUESTS_CA_BUNDLE"] = certifi.where()
@@ -462,7 +463,9 @@ class VideoRAGProcessManager:
             return True
 
         except Exception as e:
-            log_to_file(f"Video indexing failed: {str(e)}")
+            log_to_file(
+                f"Video indexing failed: {str(e)}. Global config: {self.global_config}"
+            )
             raise
 
     def start_query_processing(self, chat_id, query):
@@ -750,19 +753,11 @@ def index_video_worker_process(chat_id, video_path_list, global_config, server_u
         session_working_dir = os.path.join(base_storage_path, f"chat-{chat_id}")
         os.makedirs(session_working_dir, exist_ok=True)
 
-        videorag_llm_config = create_llm_config(global_config)
-
         videorag_instance = VideoRAG(
-            llm=videorag_llm_config,
+            llm=create_llm_config(global_config),
             working_dir=session_working_dir,
-            ali_dashscope_api_key=global_config.get("ali_dashscope_api_key"),
-            ali_dashscope_base_url=global_config.get("ali_dashscope_base_url"),
-            caption_model=global_config.get("caption_model"),
-            asr_model=global_config.get("asr_model"),
-            openai_api_key=global_config.get("openai_api_key"),
-            openai_base_url=global_config.get("openai_base_url"),
-            imagebind_client=imagebind_client,  # Pass HTTP client
         )
+        videorag_instance.load_caption_model()
 
         # Define progress callback - directly write to JSON file
         def progress_callback(step_name, message, indexed_video_path=None):
@@ -778,9 +773,7 @@ def index_video_worker_process(chat_id, video_path_list, global_config, server_u
                 add_indexed_video(indexed_video_path)
 
         # Call insert_video
-        videorag_instance.insert_video(
-            video_path_list=video_path_list, progress_callback=progress_callback
-        )
+        videorag_instance.insert_video(video_path_list=video_path_list)
 
         update_status(
             {
@@ -869,19 +862,10 @@ def query_worker_process(chat_id, query, global_config, server_url):
             f"Session working directory does not exist: {session_working_dir}"
         )
 
-        videorag_llm_config = create_llm_config(global_config)
-
         videorag_instance = VideoRAG(
-            llm=videorag_llm_config,
-            working_dir=session_working_dir,
-            ali_dashscope_api_key=global_config.get("ali_dashscope_api_key"),
-            ali_dashscope_base_url=global_config.get("ali_dashscope_base_url"),
-            caption_model=global_config.get("caption_model"),
-            asr_model=global_config.get("asr_model"),
-            openai_api_key=global_config.get("openai_api_key"),
-            openai_base_url=global_config.get("openai_base_url"),
-            imagebind_client=imagebind_client,  # Pass HTTP client
+            llm=create_llm_config(global_config), working_dir=session_working_dir
         )
+        videorag_instance.load_caption_model()
 
         # Step 2: Processing
         update_query_status(

@@ -28,7 +28,7 @@ async def main():
     # Load the visual analysis model before proceeding
     # If you haven't downloaded MiniCPM locally, set debug=True to skip it
     print("Caricamento modelli di analisi visiva...")
-    vrag.load_caption_model(debug=False)
+    vrag.load_caption_model()
 
     video_input = input("Inserisci il percorso del video: ").strip()
     video_path = str(Path(video_input).resolve())

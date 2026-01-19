@@ -64,7 +64,7 @@ async def main():
         llm=longervideos_llm_config,
         working_dir=f"./longervideos/videorag-workdir/{sub_category}",
     )
-    videorag.load_caption_model(debug=False)
+    videorag.load_caption_model()
 
     answer_folder = f"./longervideos/videorag-answers/{sub_category}"
     os.makedirs(answer_folder, exist_ok=True)

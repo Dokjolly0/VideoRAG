@@ -195,7 +195,7 @@ if __name__ == '__main__':
     param.wo_reference = True
 
     videorag = videorag = VideoRAG(llm=openai_4o_mini_config, working_dir=f"./videorag-workdir")
-    videorag.load_caption_model(debug=False)
+    videorag.load_caption_model()
     response = videorag.query(query=query, param=param)
     print(response)
 ```

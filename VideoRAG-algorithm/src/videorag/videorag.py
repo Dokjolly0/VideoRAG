@@ -111,19 +111,15 @@ class VideoRAG:
     addon_params: dict = field(default_factory=dict)
     convert_response_to_json_func: Callable[..., object] = convert_response_to_json
 
-    def load_caption_model(self, debug=False):
+    def load_caption_model(self):
         # caption model
         model_path = self.fl.MiniCPM
         if not model_path.exists():
             raise FileNotFoundError(f"Model path not found: {model_path}")
 
-        if not debug:
-            self.caption_model = load_model_with_fast_fallback(model_path)
-            self.caption_tokenizer = load_tokenizer_with_fast_fallback(model_path)
-            self.caption_model.eval()
-        else:
-            self.caption_model = None
-            self.caption_tokenizer = None
+        self.caption_model = load_model_with_fast_fallback(model_path)
+        self.caption_tokenizer = load_tokenizer_with_fast_fallback(model_path)
+        self.caption_model.eval()
 
     def __post_init__(self):
         _print_config = ",\n  ".join([f"{k} = {v}" for k, v in asdict(self).items()])

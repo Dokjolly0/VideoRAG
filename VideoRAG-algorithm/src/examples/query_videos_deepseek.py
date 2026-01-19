@@ -27,7 +27,7 @@ if __name__ == "__main__":
 
     # 初始化 VideoRAG，并确保工作目录与上一步骤中的一致
     videorag = VideoRAG(llm=deepseek_bge_config, working_dir="./videorag-workdir")
-    videorag.load_caption_model(debug=False)
+    videorag.load_caption_model()
 
     # 执行查询
     response = videorag.query(query=query, param=param)
