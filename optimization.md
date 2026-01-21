@@ -6,7 +6,7 @@
            * Esegui lo script src/VideoRAG-algorithm/src/scripts/torch_test.py per verificare che PyTorch rilevi correttamente la tua GPU (NVIDIA o Apple Silicon).
            * Controlla nel codice (specialmente in videorag/op.py e videorag/llm.py) che i modelli e i tensori vengano spostati esplicitamente sul device corretto (es. .to('cuda')).
            * Assicurati che le versioni di torch e torchvision installate tramite requirements.txt siano compatibili con la tua versione di CUDA.
-
+           X Completato da testare
    2. Ottimizzazione dell'Inferenza dei Modelli AI
        * Azione: I modelli di AI sono quasi sempre il principale collo di bottiglia. Anche su GPU, l'inferenza può essere lenta.
        * Come:
@@ -38,6 +38,8 @@
        * Come:
            * Utilizza profiler Python come cProfile o py-spy per analizzare il tempo di esecuzione di run_local.py. Questo ti mostrerà esattamente quali funzioni e operazioni stanno impiegando più tempo.
            * Una volta identificata una funzione lenta, puoi usare line_profiler per analizzare il tempo speso su ogni singola riga di quella funzione.
+
+   6. Ottimizza lato cli le progress bar, in molti casi non ce nessuna progress bar, quindi è importante implementarla per fornire feedback all'utente durante l'esecuzione del codice.
 
   Ti consiglio di iniziare dal Task 1 e Task 5. Verificare l'uso della GPU è il primo passo fondamentale, e la profilazione ti darà i dati necessari per decidere quali delle altre ottimizzazioni avrà l'impatto maggiore nel tuo caso
   specifico.

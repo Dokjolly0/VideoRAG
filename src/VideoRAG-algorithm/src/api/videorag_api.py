@@ -226,6 +226,7 @@ class GlobalImageBindManager:
                     audio_drop_path=0.1,
                     imu_drop_path=0.7,
                 )
+                self.embedder.imagebind_huge(pretrained=True).cuda()
 
                 if not self.model_path or not os.path.exists(self.model_path):
                     raise FileNotFoundError(

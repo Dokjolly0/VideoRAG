@@ -3,6 +3,7 @@ from dataclasses import dataclass
 from typing import Awaitable, Callable, Optional
 
 import numpy as np
+import torch
 from ollama import AsyncClient
 from openai import APIConnectionError, AsyncAzureOpenAI, AsyncOpenAI, RateLimitError
 from tenacity import (
@@ -23,6 +24,7 @@ from ..videorag.utils import (
 global_openai_async_client = None
 global_azure_openai_async_client = None
 global_ollama_client = None
+DEVICE = "cuda" if torch.cuda.is_available() else "cpu"
 
 
 def get_openai_async_client_instance():
@@ -519,11 +521,26 @@ deepseek_bge_config = LLMConfig(
 )
 
 
-def load_model_with_fast_fallback(model_path):
+def load_model_with_fast_fallback(model_path, device: Optional[str] = None):
+    """
+    Carica un modello HF e lo sposta esplicitamente sul device richiesto.
+    Se device è None, usa 'cuda' se disponibile, altrimenti 'cpu'.
+    """
+    if device is None:
+        device = DEVICE  # 'cuda' se disponibile, altrimenti 'cpu'
+
+    # Se qualcuno passa esplicitamente 'cuda' ma non è disponibile, fai fallback pulito a 'cpu'
+    if device.startswith("cuda") and not torch.cuda.is_available():
+        device = "cpu"
+
     model = AutoModel.from_pretrained(
         model_path,
         trust_remote_code=True,
     )
+
+    model = model.to(device)
+    model.eval()  # inference-only
+
     return model
 
 

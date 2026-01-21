@@ -254,7 +254,8 @@ class VideoUtils:
             caption_result[this_segment] = (
                 f"Caption:\n{this_caption}\nTranscript:\n{segment_transcript}\n\n"
             )
-            torch.cuda.empty_cache()
+            if torch.cuda.is_available():
+                torch.cuda.empty_cache()
 
         return caption_result
 
@@ -265,9 +266,13 @@ class VideoUtils:
         if not model_path.exists():
             raise FileNotFoundError(f"Model path not found: {model_path}")
 
-        model = WhisperModel(os.path.abspath(model_path))
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+        model = WhisperModel(
+            os.path.abspath(model_path),
+            device=device,
+            compute_type="float16",  # optional but recommended for faster inference
+        )
         model.logger.setLevel(logging.WARNING)
-
         cache_path = os.path.join(working_dir, "_cache", video_name)
 
         transcripts = {}
