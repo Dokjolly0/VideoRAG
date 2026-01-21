@@ -3,50 +3,23 @@ import subprocess
 import sys
 from pathlib import Path
 
+try:
+    from .file_locator import FileLocator
+except (ImportError, ValueError):
+    from file_locator import FileLocator
 from huggingface_hub import snapshot_download
-
-from ..utils.file_locator import FileLocator
 
 
 class LLMWeightsInstaller:
-    def __init__(
-        self,
-        current_script_path: str | Path | None = None,
-        installer_dir: str | Path | None = None,
-        project_root: str | Path | None = None,
-    ):
-        self.fl = FileLocator()
-
-        if current_script_path:
-            self.CURRENT_SCRIPT = Path(current_script_path).resolve()
+    def __init__(self, models_path: str | Path | None = None):
+        self.fl = FileLocator(check_paths=False)
+        if models_path:
+            self.MODEL_PATH = Path(models_path).resolve()
         else:
-            self.CURRENT_SCRIPT = Path(__file__).resolve()
-
-        if installer_dir:
-            self.INSTALLER_DIR = Path(installer_dir).resolve()
-        else:
-            self.INSTALLER_DIR = self.CURRENT_SCRIPT.parent
-
-        if project_root:
-            self.PROJECT_ROOT = Path(project_root).resolve()
-        else:
-            self.PROJECT_ROOT = self.INSTALLER_DIR.parent.parent.parent / "models"
+            self.MODEL_PATH = self.fl.ModelPath
 
         # paths check
-        self.check_path_exists(
-            [self.PROJECT_ROOT, self.INSTALLER_DIR, self.CURRENT_SCRIPT]
-        )
-
-    def check_path_exists(self, paths: list[Path]):
-        """
-        Utility function to check if a given path exists.
-        """
-        for p in paths:
-            if not p.exists():
-                try:
-                    p.mkdir(parents=True)
-                except PermissionError:
-                    raise PermissionError(f"Permission denied to create directory: {p}")
+        self.fl.check_all_paths([self.fl.ModelPath], create_if_not_exists=True)
 
     def install_package(
         self, package_name: str, import_name: str, pip_install_cmd=None
@@ -104,7 +77,7 @@ class LLMWeightsInstaller:
 
 if __name__ == "__main__":
     installer: LLMWeightsInstaller = LLMWeightsInstaller()
-    print(f"📂 Project Root detected: {installer.PROJECT_ROOT}")
+    print(f"📂 Model path detected: {installer.MODEL_PATH}")
     # 1. Install Faster Whisper (Required for faster-distil-whisper-large-v3)
     #    Pip name: faster-whisper, Import name: faster_whisper
     installer.install_package(

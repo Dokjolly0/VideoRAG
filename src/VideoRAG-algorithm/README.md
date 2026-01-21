@@ -335,35 +335,3 @@ We extend our heartfelt gratitude to the open-source community and the foundatio
 Our framework builds upon the collective wisdom of these exceptional projects, and we are honored to contribute to the advancement of multimodal AI research. We also acknowledge the broader research community for their continued dedication to pushing the boundaries of video understanding and retrieval-augmented generation.
 
 **🌟 Thank you for your interest in our work! Together, we're shaping the future of intelligent video AI. 🌟**
-
-## Run all in local with NVIDIA GPU
-
-### Setup environment
-
-- Install conda
-- Run in bash this following commands
-
-```bash
-conda create -n videorag python=3.10
-conda activate videorag
-pip install -r .\VideoRAG-algorithm\requirements.txt
-pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu121
-python installer/install_llm_weights.py
-cd VideoRAG-algorithm
-```
-
-- Test succesfull installation of torch and check version and nvidia support
-
-```bash
-python scripts/torch_test.py
-```
-
-- Install ollama (if not installed)
-- Pull lama3 and nomic-embed-text model
-
-```bash
-ollama pull llama3:8b
-ollama pull nomic-embed-text
-ollama pull olmo2
-ollama pull gemma2:latest
-```

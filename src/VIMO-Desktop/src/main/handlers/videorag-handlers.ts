@@ -83,6 +83,7 @@ export function startVideoRAGService(): Promise<boolean> {
           resolve(value);
         }
       };
+
       const safeReject = (error: Error) => {
         if (!resolved) {
           resolved = true;
